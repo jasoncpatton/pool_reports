@@ -8,6 +8,10 @@ import sys
 
 from email_functions import send_email
 
+to = [
+    "ospool-reports@path-cc.io"
+]
+
 es_index_name = "daily_totals"
 query_id = "OSG-schedd-job-history"
 report_period = "daily"
@@ -134,7 +138,7 @@ def main():
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"Weekly OSPool Totals Summary from {(now - timedelta(days=8)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
-    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=["jpatton@cs.wisc.edu"], replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])
+    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
     main()

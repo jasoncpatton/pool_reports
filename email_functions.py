@@ -45,8 +45,8 @@ def send_email(from_addr, to_addrs, subject="", replyto_addr=None, cc_addrs=[], 
                 smtp.quit
             except Exception:
                 if result is not None:
-                    logging.error(f"Got result: {result}")
-                logging.exception(f"Could not send to {recipient} using {mailserver}")
+                    print(f"Got result: {result}")
+                print(f"Could not send to {recipient} using {mailserver}")
             else:
                 sent = True
             if sent:

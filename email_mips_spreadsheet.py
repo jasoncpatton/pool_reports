@@ -8,6 +8,13 @@ import sys
 
 from email_functions import send_email
 
+to = [
+    "jpatton@cs.wisc.edu",
+    "miron@cs.wisc.edu",
+    "gthain@cs.wisc.edu",
+    "bbockelman@morgridge.org",
+]
+
 es_index_name = "mips_report"
 pool_name = "OSPool"
 now = datetime.now()
@@ -118,7 +125,7 @@ def main():
     docs = do_query(es, es_index_name, query)
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"Weekly OSPool MIPS Summary from {(now - timedelta(days=8)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
-    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=["jpatton@cs.wisc.edu"], replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])
+    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
     main()
