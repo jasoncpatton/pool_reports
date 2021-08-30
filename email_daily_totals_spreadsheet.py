@@ -74,7 +74,7 @@ def write_xlsx_html(docs, xlsx_file):
     workbook = xlsxwriter.Workbook(str(xlsx_file))
     worksheet = workbook.add_worksheet()
 
-    html = "<html><head></head><body><table>\n"
+    html = '<html><head></head><body><table style="border-collapse: collapse">\n'
 
     header_format = workbook.add_format({"text_wrap": True, "align": "center"})
     date_format = workbook.add_format({"num_format": "yyyy-mm-dd"})
@@ -85,7 +85,7 @@ def write_xlsx_html(docs, xlsx_file):
     row = 0
     html += "<tr>"
     for col, header in enumerate(headers):
-        html += f"<th>{header}</th>"
+        html += f'<th style="border: 1px solid black">{header}</th>'
         worksheet.write(row, col, header, header_format)
     html += "</tr>\n"
     for i, doc in enumerate(docs):
@@ -95,24 +95,24 @@ def write_xlsx_html(docs, xlsx_file):
             if col_name == "Date":
                 date_str = doc[headers[col_name]]
                 date = datetime.strptime(date_str, "%Y-%m-%d")
-                html += f'<td>{date_str.replace("-", "&#8209;")}</td>'
+                html += f'<td style="border: 1px solid black">{date_str.replace("-", "&#8209;")}</td>'
                 worksheet.write(row, col, date, date_format)
             elif (col_name == "All CPU Hours") or (col_name[0:3] == "Num"):
-                html += f'<td style="text-align: right">{int(doc[headers[col_name]]):,}</td>'
+                html += f'<td style="text-align: right; border: 1px solid black">{int(doc[headers[col_name]]):,}</td>'
                 worksheet.write(row, col, doc[headers[col_name]], int_format)
             elif " / " in col_name:
-                html += f'<td style="text-align: right">{doc[headers[col_name]]:.2f}</td>'
+                html += f'<td style="text-align: right; border: 1px solid black">{doc[headers[col_name]]:.2f}</td>'
                 worksheet.write(row, col, doc[headers[col_name]], float_format)
             elif col_name[0] == "%":
-                html += f'<td style="text-align: right">{doc[headers[col_name]]:.2f}%</td>'
+                html += f'<td style="text-align: right; border: 1px solid black">{doc[headers[col_name]]:.2f}%</td>'
                 worksheet.write(row, col, doc[headers[col_name]]/100, pct_format)
             elif col_name[-5:] == "Hours":
                 h = int(doc[headers[col_name]])
                 m = int(60 * (doc[headers[col_name]] - h))
-                html += f'<td style="text-align: right">{h}:{m:02d}</td>'
+                html += f'<td style="text-align: right; border: 1px solid black">{h}:{m:02d}</td>'
                 worksheet.write(row, col, doc[headers[col_name]]/24, hour_format)
             else:
-                html += f'<td>{doc[headers[col_name]]}</td>'
+                html += f'<td style="border: 1px solid black">{doc[headers[col_name]]}</td>'
                 worksheet.write(row, col, doc[headers[col_name]])
         html += "</tr>\n"
 
