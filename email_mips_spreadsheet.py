@@ -26,7 +26,7 @@ def get_query(pool_name, now):
                 "filter": [
                     {"range": {
                         "date": {
-                            "gte": (now - timedelta(days=8)).strftime("%Y-%m-%d %H:%M:%S"),
+                            "gte": (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
                             "lt": now.strftime("%Y-%m-%d %H:%M:%S"),
                         }
                     }},
