@@ -49,9 +49,9 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "% Slow MIPS", "% Slow Cores",
-                   "Min MIPS", "Mean MIPS", "Median MIPS", "Max MIPS",
-                   "Total MIPS", "Slow MIPS", "Total Cores", "Slow Cores"]
+    headers = ["Date", "Total Cores", "Total MIPS", "% Slow MIPS", "% Slow Cores",
+                   "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
+                   "Slow MIPS", "Slow Cores"]
     col_ids = OrderedDict(zip(headers, ascii_uppercase))
     header_key = {
         "Date": "date",
@@ -71,7 +71,7 @@ def write_xlsx_html(docs, xlsx_file):
     html = '<html><head></head><body><table style="border-collapse: collapse">\n'
 
     header_format = workbook.add_format({"text_wrap": True, "align": "center"})
-    date_format = workbook.add_format({"num_format": "yyyy-mm-dd h AM/PM"})
+    date_format = workbook.add_format({"num_format": "mm-dd h AM/PM"})
     int_format = workbook.add_format({"num_format": "#,##0"})
     pct_format = workbook.add_format({"num_format": "#,##0.00%"})
     row = 0
@@ -87,7 +87,7 @@ def write_xlsx_html(docs, xlsx_file):
             if col_name == "Date":
                 date_str = doc[header_key[col_name]]
                 date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-                html += f'<td style="border: 1px solid black">{date_str.replace("-", "&#8209;")}</td>'
+                html += f'<td style="border: 1px solid black">{date.strftime("%m-%d %H:%M")}</td>'
                 worksheet.write(row, col, date, date_format)
             elif col_name in header_key:
                 html += f'<td style="text-align: right; border: 1px solid black">{int(doc[header_key[col_name]]):,}</td>'
@@ -125,7 +125,7 @@ def main():
     docs = do_query(es, es_index_name, query)
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"))
     html = write_xlsx_html(docs, xlsx_file)
-    subject = f"Weekly OSPool MIPS Summary from {(now - timedelta(days=8)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
+    subject = f"30-day OSPool MIPS Summary from {(now - timedelta(days=30)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
     send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
