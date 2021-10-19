@@ -1,0 +1,28 @@
+{
+    "properties": {
+        "input_files_xferd_per_exec_att": {
+            "type": "float"
+        }
+        "input_mb_per_file": {
+            "type": "float"
+        }
+        "input_mb_xferd_per_exec_att": {
+            "type": "float"
+        }
+        "num_s'ty_jobs": {
+            "type": "long"
+        }
+        "output_files_xferd_per_exec_att": {
+            "type": "float"
+        }
+        "output_mb_per_file": {
+            "type": "float"
+        }
+        "output_mb_xferd_per_exec_att": {
+            "type": "float"
+        }
+        "pct_jobs_using_s'ty": {
+            "type": "float"
+        }
+    }
+}
