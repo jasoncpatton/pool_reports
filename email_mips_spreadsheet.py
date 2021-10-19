@@ -21,6 +21,7 @@ now = datetime.now()
 
 def get_query(pool_name, now):
     query = {
+        "size": 30*4,
         "query": {
             "bool": {
                 "filter": [
