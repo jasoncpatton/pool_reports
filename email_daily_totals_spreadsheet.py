@@ -53,33 +53,33 @@ def write_xlsx_html(docs, xlsx_file):
         ("Date", "date"),
         ("All CPU Hours", "all_cpu_hours"),
         ("% Good CPU Hours", "pct_good_cpu_hours"),
-        ("Num Projects", "num_projects"),
+        ("Num Proj", "num_projects"),
         ("Num Users", "num_users"),
         ("Num Sites", "num_sites"),
-        ("Num Access Pts", "num_schedds"),
+        ("Num Acc Pts", "num_schedds"),
         ("Num Jobs", "num_uniq_job_ids"),
         ("% Rm'd Jobs", "pct_rmed_jobs"),
         ("% Jobs w/ 1+ Holds", "pct_jobs_with_1+_holds"),
         ("% Jobs w/ 2+ Exec Att", "pct_jobs_with_more_than_1_exec_att"),
         ("% Short Jobs", "pct_short_jobs"),
         ("% S'ty Jobs", "pct_jobs_using_s'ty"),
-        ("Shadow Starts / Job Id", "shadw_starts_per_job_id"),
-        ("Exec Att / Shadow Start", "exec_atts_per_shadw_start"),
+        ("Shadw Starts / Job Id", "shadw_starts_per_job_id"),
+        ("Exec Att / Shadw Start", "exec_atts_per_shadw_start"),
         ("Holds / Job Id", "holds_per_job_id"),
-        ("CPU Hours / Bad Exec Att", "cpu_hours_per_bad_exec_att"),
-        ("25th % Hours", "25pct_hrs"),
-        ("Median Hours", "med_hrs"),
-        ("75th % Hours", "75pct_hrs"),
-        ("95th % Hours", "95pct_hrs"),
-        ("Max Hours", "max_hrs"),
-        ("Mean Hours", "mean_hrs"),
-        ("Std Dev Hours", "std_hrs"),
-        ("Input Files / Exec Att", "input_files_xferd_per_exec_att"),
-        ("Input MB / Exec Att", "input_mb_xferd_per_exec_att"),
-        ("Input MB / File", "input_mb_per_file"),
-        ("Output Files / Exec Att", "output_files_xferd_per_exec_att"),
-        ("Output MB / Exec Att", "output_mb_xferd_per_exec_att"),
-        ("Output MB / File", "output_mb_per_file"),
+        ("CPU Hrs / Bad Exec Att", "cpu_hours_per_bad_exec_att"),
+        ("25th % Hrs", "25pct_hrs"),
+        ("Med Hrs", "med_hrs"),
+        ("75th % Hrs", "75pct_hrs"),
+        ("95th % Hrs", "95pct_hrs"),
+        ("Max Hrs", "max_hrs"),
+        ("Mean Hrs", "mean_hrs"),
+        ("Std Dev Hrs", "std_hrs"),
+        ("Inpt Files / Exec Att", "input_files_xferd_per_exec_att"),
+        ("Inpt MB / Exec Att", "input_mb_xferd_per_exec_att"),
+        ("Inpt MB / File", "input_mb_per_file"),
+        ("Outpt Files / Exec Att", "output_files_xferd_per_exec_att"),
+        ("Outpt MB / Exec Att", "output_mb_xferd_per_exec_att"),
+        ("Outpt MB / File", "output_mb_per_file"),
     ])
     dbl_letters = [f"A{x}" for x in ascii_uppercase]
     col_ids = OrderedDict(zip(list(headers.keys()), list(ascii_uppercase) + dbl_letters))
@@ -111,7 +111,7 @@ def write_xlsx_html(docs, xlsx_file):
             elif col_name == "Date":
                 date_str = doc[headers[col_name]]
                 date = datetime.strptime(date_str, "%Y-%m-%d")
-                html += f'<td style="border: 1px solid black">{date.strftime("%m-%d")}</td>'
+                html += f'<td style="border: 1px solid black">{date.strftime("%m&#8209;%d")}</td>'
                 worksheet.write(row, col, date, date_format)
             elif (col_name == "All CPU Hours") or (col_name[0:3] == "Num"):
                 html += f'<td style="text-align: right; border: 1px solid black">{int(doc[headers[col_name]]):,}</td>'
@@ -122,7 +122,7 @@ def write_xlsx_html(docs, xlsx_file):
             elif col_name[0] == "%":
                 html += f'<td style="text-align: right; border: 1px solid black">{doc[headers[col_name]]:.2f}%</td>'
                 worksheet.write(row, col, doc[headers[col_name]]/100, pct_format)
-            elif col_name[-5:] == "Hours":
+            elif col_name[-5:] == "Hours" or col_name[-3:] == "Hrs":
                 h = int(doc[headers[col_name]])
                 m = int(60 * (doc[headers[col_name]] - h))
                 html += f'<td style="text-align: right; border: 1px solid black">{h}:{m:02d}</td>'
@@ -150,7 +150,7 @@ def main():
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"30-day OSPool Totals Summary from {(now - timedelta(days=30)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
-    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, subject=subject, html=html, attachments=[xlsx_file])
+    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
     main()
