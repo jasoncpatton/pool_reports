@@ -13,9 +13,10 @@ now = datetime.now()
 
 def get_mips():
     collector = htcondor.Collector(pool)
-    startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["Mips", "Cpus"])
+    startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["Mips", "Cpus", "Has_Singularity"])
 
-    mips = []  
+    mips = []
+    has_singularity = []
     for ad in startd_ads:
         if not ("Mips" in ad) or not ("Cpus" in ad):
             continue
@@ -25,11 +26,15 @@ def get_mips():
         except ValueError:
             continue
         for i in range(ad["Cpus"]):
+            try:
+                has_singularity.append(int(ad.get("Has_Singularity", False) == True))
+            except Exception:
+                pass
             mips.append(ad["Mips"])
 
-    return mips
+    return mips, has_singularity
 
-def get_mips_summary(mips):
+def get_mips_summary(mips, has_singularity):
     mips.sort()
 
     total_slow_mips = 0
@@ -39,6 +44,7 @@ def get_mips_summary(mips):
 
     total_slow_mips = sum(mips[:slow_mips_i])
     total_mips = sum(mips)
+    total_has_singularity = sum(has_singularity)
 
     mips_summary = {
         "date": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -54,6 +60,8 @@ def get_mips_summary(mips):
         "total_slow_mips": total_slow_mips,
         "total_mips": total_mips,
         "pct_slow_mips": 100*total_slow_mips/total_mips,
+        "total_singularity_cores": total_has_singularity,
+        "pct_singularity_cores": 100*total_has_singularity/len(has_singularity),
     }
     return mips_summary
 
@@ -85,8 +93,8 @@ def push_mips_summary(mips_summary):
 
 def main():
 
-    mips = get_mips()
-    mips_summary = get_mips_summary(mips)
+    mips, has_singularity = get_mips()
+    mips_summary = get_mips_summary(mips, has_singularity)
     push_mips_summary(mips_summary)
 
 if __name__ == "__main__":

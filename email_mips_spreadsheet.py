@@ -50,9 +50,10 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "Total Cores", "Total MIPS", "% Slow MIPS", "% Slow Cores",
+    headers = ["Date", "Total Cores", "Total MIPS", "Total Singularity Cores",
+                   "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
                    "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
-                   "Slow MIPS", "Slow Cores"]
+                   "Slow MIPS", "Slow Cores",]
     col_ids = OrderedDict(zip(headers, ascii_uppercase))
     header_key = {
         "Date": "date",
@@ -64,6 +65,7 @@ def write_xlsx_html(docs, xlsx_file):
         "Slow MIPS": "total_slow_mips",
         "Total Cores": "total_cores",
         "Slow Cores": "slow_cores",
+        "Total Singularity Cores": "total_singularity_cores",
     }
 
     workbook = xlsxwriter.Workbook(str(xlsx_file))
@@ -78,7 +80,7 @@ def write_xlsx_html(docs, xlsx_file):
     row = 0
     html += "<tr>"
     for col, header in enumerate(headers):
-        html += f'<th style="border: 1px solid black">{header}</th>'
+        html += f'''<th style="border: 1px solid black">{header.replace("Singularity", "S'ty")}</th>'''
         worksheet.write(row, col, header, header_format)
     html += "</tr>\n"
     for i, doc in enumerate(docs):
@@ -91,8 +93,12 @@ def write_xlsx_html(docs, xlsx_file):
                 html += f'<td style="border: 1px solid black">{date.strftime("%m-%d %H:%M")}</td>'
                 worksheet.write(row, col, date, date_format)
             elif col_name in header_key:
-                html += f'<td style="text-align: right; border: 1px solid black">{int(doc[header_key[col_name]]):,}</td>'
-                worksheet.write(row, col, doc[header_key[col_name]], int_format)
+                if header_key[col_name] in doc:
+                    html += f'<td style="text-align: right; border: 1px solid black">{int(doc[header_key[col_name]]):,}</td>'
+                    worksheet.write(row, col, doc[header_key[col_name]], int_format)
+                else:
+                    html += f'<td style="text-align: right; border: 1px solid black"></td>'
+                    worksheet.write(row, col, "", int_format)
             elif col_name == "% Slow MIPS":
                 slow_mips = 100 * doc[header_key["Slow MIPS"]] / doc[header_key["Total MIPS"]]
                 html += f'<td style="text-align: right; border: 1px solid black">{slow_mips:.2f}%</td>'
@@ -103,6 +109,16 @@ def write_xlsx_html(docs, xlsx_file):
                 html += f'<td style="text-align: right; border: 1px solid black">{slow_cores:.2f}%</td>'
                 formula = f"={col_ids['Slow Cores']}{row+1}/{col_ids['Total Cores']}{row+1}"
                 worksheet.write(row, col, formula, pct_format)
+            elif col_name == "% Singularity Cores":
+                if header_key["Total Singularity Cores"] in doc:
+                    singularity_cores = 100 * doc[header_key["Total Singularity Cores"]] / doc[header_key["Total Cores"]]
+                    html += f'<td style="text-align: right; border: 1px solid black">{singularity_cores:.2f}%</td>'
+                    formula = formula = f"={col_ids['Singularity Cores']}{row+1}/{col_ids['Total Cores']}{row+1}"
+                else:
+                    html += f'<td style="text-align: right; border: 1px solid black"></td>'
+                    formula = ""
+                worksheet.write(row, col, formula, pct_format)
+
         html += "</tr>\n"
 
     row = row+2
