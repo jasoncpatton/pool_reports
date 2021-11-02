@@ -113,7 +113,7 @@ def write_xlsx_html(docs, xlsx_file):
                 if header_key["Total Singularity Cores"] in doc:
                     singularity_cores = 100 * doc[header_key["Total Singularity Cores"]] / doc[header_key["Total Cores"]]
                     html += f'<td style="text-align: right; border: 1px solid black">{singularity_cores:.2f}%</td>'
-                    formula = formula = f"={col_ids['Singularity Cores']}{row+1}/{col_ids['Total Cores']}{row+1}"
+                    formula = formula = f"={col_ids['Total Singularity Cores']}{row+1}/{col_ids['Total Cores']}{row+1}"
                 else:
                     html += f'<td style="text-align: right; border: 1px solid black"></td>'
                     formula = ""
