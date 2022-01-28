@@ -3,7 +3,7 @@ from datetime import datetime
 import elasticsearch
 import json
 
-pool = "flock.opensciencegrid.org"
+pool = "cm-1.ospool.osg-htc.org"
 pool_name = "OSPool"
 mips_threshold = 11800
 

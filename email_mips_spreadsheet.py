@@ -13,6 +13,7 @@ to = [
     "miron@cs.wisc.edu",
     "gthain@cs.wisc.edu",
     "bbockelman@morgridge.org",
+    "lmichael@wisc.edu",
 ]
 
 es_index_name = "mips_report"
