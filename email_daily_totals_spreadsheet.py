@@ -12,8 +12,6 @@ to = [
     "ospool-reports@path-cc.io"
 ]
 
-to = ["jpatton@cs.wisc.edu"]
-
 es_index_name = "daily_totals"
 query_id = "OSG-schedd-job-history"
 report_period = "daily"
