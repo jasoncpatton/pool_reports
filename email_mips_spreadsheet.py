@@ -141,7 +141,7 @@ def main():
     es = elasticsearch.Elasticsearch()
     query = get_query(pool_name, now)
     docs = do_query(es, es_index_name, query)
-    docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"))
+    docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"), reverse=True)
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"30-day OSPool MIPS Summary from {(now - timedelta(days=30)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
     send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])

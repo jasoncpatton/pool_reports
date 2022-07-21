@@ -164,7 +164,7 @@ def main():
     es = elasticsearch.Elasticsearch()
     query = get_query(query_id, report_period, now)
     docs = do_query(es, es_index_name, query)
-    docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
+    docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d"), reverse=True)
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"30-day OSPool Totals Summary from {(now - timedelta(days=30)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
     send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file])
