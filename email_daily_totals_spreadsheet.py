@@ -2,30 +2,28 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 from string import ascii_uppercase
 from pathlib import Path
+import argparse
 import elasticsearch
 import xlsxwriter
 import sys
 
 from email_functions import send_email
 
-to = [
-    "ospool-reports@path-cc.io"
-]
+TO = ["ospool-reports@path-cc.io"]
+DAYS = 30
+ES_INDEX_NAME = "daily_totals"
+QUERY_ID = "OSG-schedd-job-history"
+REPORT_PERIOD = "daily"
 
-es_index_name = "daily_totals"
-query_id = "OSG-schedd-job-history"
-report_period = "daily"
-now = datetime.now()
-
-def get_query(query_id, report_period, now):
+def get_query(query_id, report_period, days, now):
     query = {
-        "size": 31,
+        "size": days+1,
         "query": {
             "bool": {
                 "filter": [
                     {"range": {
                         "date": {
-                            "gte": (now - timedelta(days=30)).strftime("%Y-%m-%d"),
+                            "gte": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
                             "lt": now.strftime("%Y-%m-%d"),
                         }
                     }},
@@ -159,14 +157,25 @@ def write_xlsx_html(docs, xlsx_file):
     return html
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--to", action="append")
+    parser.add_argument("--days", type=int, default=DAYS)
+    return parser.parse_args()
+
+
 def main():
-    xlsx_file = Path() / "daily_totals_sheets" / now.strftime("%Y-%m-%d_Monthly_Summary.xlsx")
+    now = datetime.now()
+    args = parse_args()
+    days = args.days
+    to = args.to or TO
+    xlsx_file = Path() / "daily_totals_sheets" / now.strftime(f"%Y-%m-%d_OSPool_{days}day_Summary.xlsx")
     es = elasticsearch.Elasticsearch()
-    query = get_query(query_id, report_period, now)
-    docs = do_query(es, es_index_name, query)
+    query = get_query(QUERY_ID, REPORT_PERIOD, days, now)
+    docs = do_query(es, ES_INDEX_NAME, query)
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d"), reverse=True)
     html = write_xlsx_html(docs, xlsx_file)
-    subject = f"30-day OSPool Totals Summary from {(now - timedelta(days=30)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
+    subject = f"{days}-day OSPool Totals Summary from {(now - timedelta(days=days)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
     send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
