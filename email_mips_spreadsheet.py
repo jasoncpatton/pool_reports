@@ -2,33 +2,33 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 from string import ascii_uppercase
 from pathlib import Path
+import argparse
 import elasticsearch
 import xlsxwriter
 import sys
 
 from email_functions import send_email
 
-to = [
+TO = [
     "jpatton@cs.wisc.edu",
     "miron@cs.wisc.edu",
     "gthain@cs.wisc.edu",
     "bbockelman@morgridge.org",
     "ckoch5@wisc.edu",
 ]
+DAYS = 30
+ES_INDEX_NAME = "mips_report"
+POOL_NAME = "OSPool"
 
-es_index_name = "mips_report"
-pool_name = "OSPool"
-now = datetime.now()
-
-def get_query(pool_name, now):
+def get_query(pool_name, days, now):
     query = {
-        "size": 30*4,
+        "size": days*4,
         "query": {
             "bool": {
                 "filter": [
                     {"range": {
                         "date": {
-                            "gte": (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
+                            "gte": (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S"),
                             "lt": now.strftime("%Y-%m-%d %H:%M:%S"),
                         }
                     }},
@@ -134,16 +134,27 @@ def write_xlsx_html(docs, xlsx_file):
 
     html += "</table></body></html>"
     return html
-    
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--to", action="append")
+    parser.add_argument("--days", type=int, default=DAYS)
+    return parser.parse_args()
+
 
 def main():
-    xlsx_file = Path() / "mips_sheets" / now.strftime("%Y-%m-%d_MIPS_Report.xlsx")
+    now = datetime.now()
+    args = parse_args()
+    days = args.days
+    to = args.to or TO
+    xlsx_file = Path() / "mips_sheets" / now.strftime(f"%Y-%m-%d_{days}day_MIPS_Report.xlsx")
     es = elasticsearch.Elasticsearch()
-    query = get_query(pool_name, now)
-    docs = do_query(es, es_index_name, query)
+    query = get_query(POOL_NAME, days, now)
+    docs = do_query(es, ES_INDEX_NAME, query)
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"), reverse=True)
     html = write_xlsx_html(docs, xlsx_file)
-    subject = f"30-day OSPool MIPS Summary from {(now - timedelta(days=30)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
+    subject = f"{days}-day {POOL_NAME} MIPS Summary from {(now - timedelta(days=days)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
     send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
