@@ -51,13 +51,14 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "Total Cores", "Total MIPS", "Total Singularity Cores",
+    headers = ["Date", "Num Sites", "Total Cores", "Total MIPS", "Total Singularity Cores",
                    "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
                    "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
                    "Slow MIPS", "Slow Cores",]
     col_ids = OrderedDict(zip(headers, ascii_uppercase))
     header_key = {
         "Date": "date",
+        "Num Sites": "total_sites",
         "Min MIPS": "min_mips",
         "Mean MIPS": "mean_mips",
         "Median MIPS": "median_mips",

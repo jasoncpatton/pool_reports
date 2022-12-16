@@ -13,14 +13,16 @@ now = datetime.now()
 
 def get_mips():
     collector = htcondor.Collector(pool)
-    startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["Mips", "Cpus", "Has_Singularity"])
+    startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["GLIDEIN_Site", "Mips", "Cpus", "Has_Singularity"])
 
+    sites = set()
     mips = []
     has_singularity = []
     for ad in startd_ads:
         if not ("Mips" in ad) or not ("Cpus" in ad):
             continue
         try:
+            sites.add(ad["GLIDEIN_Site"])
             int(ad["Mips"])
             int(ad["Cpus"])
         except ValueError:
@@ -32,9 +34,9 @@ def get_mips():
                 pass
             mips.append(ad["Mips"])
 
-    return mips, has_singularity
+    return mips, sites, has_singularity
 
-def get_mips_summary(mips, has_singularity):
+def get_mips_summary(mips, sites, has_singularity):
     mips.sort()
 
     total_slow_mips = 0
@@ -51,6 +53,7 @@ def get_mips_summary(mips, has_singularity):
         "pool": pool,
         "pool_name": pool_name,
         "mips_threshold": mips_threshold,
+        "total_sites": len(sites),
         "min_mips": mips[0],
         "max_mips": mips[-1],
         "mean_mips": int(total_mips/len(mips)),
@@ -93,8 +96,8 @@ def push_mips_summary(mips_summary):
 
 def main():
 
-    mips, has_singularity = get_mips()
-    mips_summary = get_mips_summary(mips, has_singularity)
+    mips, sites, has_singularity = get_mips()
+    mips_summary = get_mips_summary(mips, sites, has_singularity)
     push_mips_summary(mips_summary)
 
 if __name__ == "__main__":
