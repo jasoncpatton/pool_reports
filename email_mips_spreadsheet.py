@@ -52,7 +52,7 @@ def do_query(es, index, body):
 
 def write_xlsx_html(docs, xlsx_file):
     headers = ["Date", "Num Sites", "Total Cores", "Total MIPS", "Total Singularity Cores",
-                   "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
+                   "Sites w/o S'ty", "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
                    "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
                    "Slow MIPS", "Slow Cores",]
     col_ids = OrderedDict(zip(headers, ascii_uppercase))
@@ -68,6 +68,7 @@ def write_xlsx_html(docs, xlsx_file):
         "Total Cores": "total_cores",
         "Slow Cores": "slow_cores",
         "Total Singularity Cores": "total_singularity_cores",
+        "Sites w/o S'ty": "total_non_singularity_sites",
     }
 
     workbook = xlsxwriter.Workbook(str(xlsx_file))
