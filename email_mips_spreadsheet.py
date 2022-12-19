@@ -15,6 +15,7 @@ TO = [
     "gthain@cs.wisc.edu",
     "bbockelman@morgridge.org",
     "ckoch5@wisc.edu",
+    "tannenba@cs.wisc.edu",
 ]
 DAYS = 30
 ES_INDEX_NAME = "mips_report"
