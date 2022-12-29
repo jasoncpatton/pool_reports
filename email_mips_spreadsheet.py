@@ -10,12 +10,8 @@ import sys
 from email_functions import send_email
 
 TO = [
-    "jpatton@cs.wisc.edu",
-    "miron@cs.wisc.edu",
+    "ospool-reports@path-cc.io",
     "gthain@cs.wisc.edu",
-    "bbockelman@morgridge.org",
-    "ckoch5@wisc.edu",
-    "tannenba@cs.wisc.edu",
 ]
 DAYS = 30
 ES_INDEX_NAME = "mips_report"
@@ -52,7 +48,7 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "Num Sites", "Total Cores", "Total MIPS", "Total Singularity Cores",
+    headers = ["Date", "Num Sites", "Top Core Sites", "Total Cores", "Total MIPS", "Total Singularity Cores",
                    "Sites w/o S'ty", "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
                    "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
                    "Slow MIPS", "Slow Cores",]
@@ -70,6 +66,7 @@ def write_xlsx_html(docs, xlsx_file):
         "Slow Cores": "slow_cores",
         "Total Singularity Cores": "total_singularity_cores",
         "Sites w/o S'ty": "total_non_singularity_sites",
+        "Top Core Sites": "top_3_core_sites",
     }
 
     workbook = xlsxwriter.Workbook(str(xlsx_file))
@@ -81,6 +78,7 @@ def write_xlsx_html(docs, xlsx_file):
     date_format = workbook.add_format({"num_format": "mm-dd h AM/PM"})
     int_format = workbook.add_format({"num_format": "#,##0"})
     pct_format = workbook.add_format({"num_format": "#,##0.00%"})
+    text_format = workbook.add_format({"text_wrap": True, "align": "left"})
     row = 0
     html += "<tr>"
     for col, header in enumerate(headers):
@@ -96,6 +94,14 @@ def write_xlsx_html(docs, xlsx_file):
                 date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
                 html += f'<td style="border: 1px solid black">{date.strftime("%m-%d %H:%M")}</td>'
                 worksheet.write(row, col, date, date_format)
+            elif col_name == "Top Core Sites":
+                if header_key[col_name] in doc:
+                    # add a zero-width space after comma in HTML to allow line wrapping
+                    html += f'<td style="text-align: left; border: 1px solid black">{doc[header_key[col_name]].replace(",", ",&#8203;")}</td>'
+                    worksheet.write(row, col, doc[header_key[col_name]], text_format)
+                else:
+                    html += f'<td style="text-align: left; border: 1px solid black"></td>'
+                    worksheet.write(row, col, "", text_format)
             elif col_name in header_key:
                 if header_key[col_name] in doc:
                     html += f'<td style="text-align: right; border: 1px solid black">{int(doc[header_key[col_name]]):,}</td>'
@@ -158,7 +164,7 @@ def main():
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"), reverse=True)
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"{days}-day {POOL_NAME} MIPS Summary from {(now - timedelta(days=days)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
-    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="jpatton@cs.wisc.edu", subject=subject, html=html, attachments=[xlsx_file])
+    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file])
 
 if __name__ == "__main__":
     main()

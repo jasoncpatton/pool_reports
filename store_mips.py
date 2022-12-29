@@ -1,5 +1,7 @@
 import htcondor
 from datetime import datetime
+from collections import defaultdict
+from operator import itemgetter
 import elasticsearch
 import json
 
@@ -15,6 +17,7 @@ def get_mips():
     collector = htcondor.Collector(pool)
     startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["GLIDEIN_Site", "Mips", "Cpus", "Has_Singularity"])
 
+    site_cores = defaultdict(int)
     sites = set()
     non_singularity_sites = set()
     mips = []
@@ -23,12 +26,14 @@ def get_mips():
         if not ("Mips" in ad) or not ("Cpus" in ad):
             continue
         try:
-            sites.add(ad["GLIDEIN_Site"])
+            site = ad["GLIDEIN_Site"]
+            sites.add(site)
             int(ad["Mips"])
-            int(ad["Cpus"])
+            cores = int(ad["Cpus"])
+            site_cores[site] += cores
         except ValueError:
             continue
-        for i in range(ad["Cpus"]):
+        for i in range(cores):
             try:
                 has_singularity.append(int(ad.get("Has_Singularity", False) == True))
                 if not ad.get("Has_Singularity", False):
@@ -37,9 +42,9 @@ def get_mips():
                 pass
             mips.append(ad["Mips"])
 
-    return mips, sites, non_singularity_sites, has_singularity
+    return mips, sites, site_cores, non_singularity_sites, has_singularity
 
-def get_mips_summary(mips, sites, non_singularity_sites, has_singularity):
+def get_mips_summary(mips, sites, site_cores, non_singularity_sites, has_singularity):
     mips.sort()
 
     total_slow_mips = 0
@@ -51,12 +56,15 @@ def get_mips_summary(mips, sites, non_singularity_sites, has_singularity):
     total_mips = sum(mips)
     total_has_singularity = sum(has_singularity)
 
+    sites_by_core_count = [k for k, v in sorted(site_cores.items(), key=itemgetter(1), reverse=True)]
+
     mips_summary = {
         "date": now.strftime("%Y-%m-%d %H:%M:%S"),
         "pool": pool,
         "pool_name": pool_name,
         "mips_threshold": mips_threshold,
         "total_sites": len(sites),
+        "top_3_core_sites": ",".join(sites_by_core_count[:3]),
         "total_non_singularity_sites": len(non_singularity_sites),
         "non_singularity_sites": ",".join(sorted(list(non_singularity_sites))),
         "min_mips": mips[0],
@@ -101,9 +109,10 @@ def push_mips_summary(mips_summary):
 
 def main():
 
-    mips, sites, non_singularity_sites, has_singularity = get_mips()
-    mips_summary = get_mips_summary(mips, sites, non_singularity_sites, has_singularity)
+    data_objs = get_mips()
+    mips_summary = get_mips_summary(*data_objs)
     push_mips_summary(mips_summary)
+    #print(mips_summary)
 
 if __name__ == "__main__":
     main()
