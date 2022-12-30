@@ -6,7 +6,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
 
-def send_email(from_addr, to_addrs, subject="", replyto_addr=None, cc_addrs=[], bcc_addrs=[], attachments=[], html=""):
+def send_email(from_addr, to_addrs, subject="", replyto_addr=None, cc_addrs=[], bcc_addrs=[], attachments=[], html="", text=""):
     if len(to_addrs) == 0:
         logging.error("No recipients in the To: field, not sending email")
         return
@@ -22,7 +22,11 @@ def send_email(from_addr, to_addrs, subject="", replyto_addr=None, cc_addrs=[], 
         msg["Reply-To"] = replyto_addr
     msg["Subject"] = subject
 
-    msg.attach(MIMEText(html, "html"))
+    if text:
+        msg.attach(MIMEText(text, "plain"))
+
+    if html:
+        msg.attach(MIMEText(html, "html"))
     
     for attachment in attachments:
         path = Path(attachment)
