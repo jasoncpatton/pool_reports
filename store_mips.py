@@ -15,7 +15,7 @@ now = datetime.now()
 
 def get_mips():
     collector = htcondor.Collector(pool)
-    startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["GLIDEIN_Site", "Mips", "Cpus", "Has_Singularity"])
+    startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["GLIDEIN_ResourceName", "Mips", "Cpus", "Has_Singularity"])
 
     site_cores = defaultdict(int)
     sites = set()
@@ -26,7 +26,7 @@ def get_mips():
         if not ("Mips" in ad) or not ("Cpus" in ad):
             continue
         try:
-            site = ad["GLIDEIN_Site"]
+            site = ad["GLIDEIN_ResourceName"]
             sites.add(site)
             int(ad["Mips"])
             cores = int(ad["Cpus"])
@@ -37,7 +37,7 @@ def get_mips():
             try:
                 has_singularity.append(int(ad.get("Has_Singularity", False) == True))
                 if not ad.get("Has_Singularity", False):
-                    non_singularity_sites.add(ad["GLIDEIN_Site"])
+                    non_singularity_sites.add(ad["GLIDEIN_ResourceName"])
             except Exception:
                 pass
             mips.append(ad["Mips"])
