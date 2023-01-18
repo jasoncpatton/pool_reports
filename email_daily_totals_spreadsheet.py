@@ -53,7 +53,7 @@ def write_xlsx_html(docs, xlsx_file):
         ("% Good CPU Hours", "pct_good_cpu_hours"),
         ("Num Proj", "num_projects"),
         ("Num Users", "num_users"),
-        ("Num Facilities", "num_facilitys"),
+        ("Num Insts", "num_institutions"),
         ("Num Sites", "num_sites"),
         ("Num Acc Pts", "num_schedds"),
         ("Num Jobs", "num_uniq_job_ids"),
@@ -113,12 +113,15 @@ def write_xlsx_html(docs, xlsx_file):
                 date = datetime.strptime(date_str, "%Y-%m-%d")
                 html += f'<td style="border: 1px solid black">{date.strftime("%m&#8209;%d")}</td>'
                 worksheet.write(row, col, date, date_format)
-                # Fix for Site/Facility switcheroo
+                # Fix for Site/Facility/Institutions switcheroo
                 if date < datetime(2023, 1, 3):
-                    headers["Num Facilities"] = "num_sites"
+                    headers["Num Insts"] = "num_sites"
                     headers["Num Sites"] = None
+                elif date < datetime(2023, 1, 17):
+                    headers["Num Insts"] = "num_facilitys"
+                    headers["Num Sites"] = "num_sites"
                 else:
-                    headers["Num Facilities"] = "num_facilitys"
+                    headers["Num Insts"] = "num_institutions"
                     headers["Num Sites"] = "num_sites"
             elif col_name == "Mean Actv Hrs":
                 if float(doc[headers[col_name]]) < 0:
