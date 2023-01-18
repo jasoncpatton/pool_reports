@@ -48,14 +48,13 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "Num Sites", "Top Core Sites", "Total Cores", "Total MIPS", "Total Singularity Cores",
+    headers = ["Date", "Num Insts", "Top Core Insts", "Total Cores", "Total MIPS", "Total Singularity Cores",
                    "Sites w/o S'ty", "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
                    "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
-                   "Slow MIPS", "Slow Cores",]
+                   "Slow MIPS", "Slow Cores", "Num Sites", "Top Core Sites", "Num Res", "Top Core Res"]
     col_ids = OrderedDict(zip(headers, ascii_uppercase))
     header_key = {
         "Date": "date",
-        "Num Sites": "total_sites",
         "Min MIPS": "min_mips",
         "Mean MIPS": "mean_mips",
         "Median MIPS": "median_mips",
@@ -66,7 +65,12 @@ def write_xlsx_html(docs, xlsx_file):
         "Slow Cores": "slow_cores",
         "Total Singularity Cores": "total_singularity_cores",
         "Sites w/o S'ty": "total_non_singularity_sites",
+        "Num Insts": "total_facilities",
+        "Top Core Insts": "top_3_core_facilities",
+        "Num Sites": "total_sites",
         "Top Core Sites": "top_3_core_sites",
+        "Num Resources": "total_resources",
+        "Top Core Res": "top_3_core_resources",
     }
 
     workbook = xlsxwriter.Workbook(str(xlsx_file))
@@ -94,9 +98,9 @@ def write_xlsx_html(docs, xlsx_file):
                 date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
                 html += f'<td style="border: 1px solid black">{date.strftime("%m-%d %H:%M")}</td>'
                 worksheet.write(row, col, date, date_format)
-            elif col_name == "Top Core Sites":
+            elif col_name in ("Top Core Insts", "Top Core Sites", "Top Core Res"):
                 if header_key[col_name] in doc:
-                    # add a zero-width space after comma in HTML to allow line wrapping
+                    # add a zero-width space after commas in HTML to allow line wrapping
                     html += f'<td style="text-align: left; border: 1px solid black">{doc[header_key[col_name]].replace(",", ",&#8203;")}</td>'
                     worksheet.write(row, col, doc[header_key[col_name]], text_format)
                 else:

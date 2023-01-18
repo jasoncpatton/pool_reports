@@ -5,6 +5,8 @@ from operator import itemgetter
 import elasticsearch
 import json
 
+from pull_topology import get_mappings
+
 pool = "cm-1.ospool.osg-htc.org,cm-2.ospool.osg-htc.org"
 pool_name = "OSPool"
 mips_threshold = 11800
@@ -14,37 +16,53 @@ es_index_name = "mips_report"
 now = datetime.now()
 
 def get_mips():
+    mappings = get_mappings()
     collector = htcondor.Collector(pool)
     startd_ads = collector.query(htcondor.AdTypes.Startd, projection=["GLIDEIN_ResourceName", "Mips", "Cpus", "Has_Singularity"])
 
+    resource_cores = defaultdict(int)
     site_cores = defaultdict(int)
-    sites = set()
+    facility_cores = defaultdict(int)
+    non_singularity_resources = set()
     non_singularity_sites = set()
+    non_singularity_facilities = set()
     mips = []
     has_singularity = []
     for ad in startd_ads:
         if not ("Mips" in ad) or not ("Cpus" in ad):
             continue
         try:
-            site = ad["GLIDEIN_ResourceName"]
-            sites.add(site)
+            resource = ad["GLIDEIN_ResourceName"]
+            site = mappings["site"].get(resource, f"Unmapped resource {resource}")
+            facility = mappings["facility"].get(resource, f"Unmapped resource {resource}")
+
             int(ad["Mips"])
             cores = int(ad["Cpus"])
-            site_cores[site] += cores
+
+            if cores > 0:
+                resource_cores[resource] += cores
+                site_cores[site] += cores
+                facility_cores[facility] += cores
+
+            if not ad.get("Has_Singularity", False):
+                non_singularity_resources.add(resource)
+                non_singularity_sites.add(site)
+                non_singularity_facilities.add(facility)
+
         except ValueError:
             continue
+
         for i in range(cores):
             try:
                 has_singularity.append(int(ad.get("Has_Singularity", False) == True))
-                if not ad.get("Has_Singularity", False):
-                    non_singularity_sites.add(ad["GLIDEIN_ResourceName"])
             except Exception:
                 pass
             mips.append(ad["Mips"])
 
-    return mips, sites, site_cores, non_singularity_sites, has_singularity
+    return mips, resource_cores, site_cores, facility_cores, non_singularity_resources, non_singularity_sites, non_singularity_facilities, has_singularity
 
-def get_mips_summary(mips, sites, site_cores, non_singularity_sites, has_singularity):
+
+def get_mips_summary(mips, resource_cores, site_cores, facility_cores, non_singularity_resources, non_singularity_sites, non_singularity_facilities, has_singularity):
     mips.sort()
 
     total_slow_mips = 0
@@ -56,6 +74,8 @@ def get_mips_summary(mips, sites, site_cores, non_singularity_sites, has_singula
     total_mips = sum(mips)
     total_has_singularity = sum(has_singularity)
 
+    resources_by_core_count = [k for k, v in sorted(resource_cores.items(), key=itemgetter(1), reverse=True)]
+    facilities_by_core_count = [k for k, v in sorted(facility_cores.items(), key=itemgetter(1), reverse=True)]
     sites_by_core_count = [k for k, v in sorted(site_cores.items(), key=itemgetter(1), reverse=True)]
 
     mips_summary = {
@@ -63,10 +83,15 @@ def get_mips_summary(mips, sites, site_cores, non_singularity_sites, has_singula
         "pool": pool,
         "pool_name": pool_name,
         "mips_threshold": mips_threshold,
-        "total_sites": len(sites),
+        "total_facilities": len(facility_cores),
+        "total_sites": len(site_cores),
+        "top_3_core_resources": ",".join(resources_by_core_count[:3]),
+        "top_3_core_facilities": ",".join(facilities_by_core_count[:3]),
         "top_3_core_sites": ",".join(sites_by_core_count[:3]),
+        "total_non_singularity_resources": len(non_singularity_resources),
         "total_non_singularity_sites": len(non_singularity_sites),
-        "non_singularity_sites": ",".join(sorted(list(non_singularity_sites))),
+        "total_non_singularity_facilities": len(non_singularity_facilities),
+        "non_singularity_resources": ",".join(sorted(list(non_singularity_resources))),
         "min_mips": mips[0],
         "max_mips": mips[-1],
         "mean_mips": int(total_mips/len(mips)),
