@@ -106,6 +106,49 @@ def get_mips_summary(mips, resource_cores, site_cores, facility_cores, non_singu
     }
     return mips_summary
 
+
+def get_expanse():
+    collector = htcondor.Collector(pool)
+    expanse_ads = collector.query(
+        htcondor.AdTypes.Startd,
+        constraint='GLIDEIN_ResourceName == "Expanse-PATH-EP" && PartitionableSlot',
+        projection=["Cpus", "Memory", "Disk"]
+    )
+
+    # "Almost exhausted" EP has less than 1 core, 2GB RAM, or 5GB Disk unclaimed
+    # "Completely exhausted" EP has less than 1 core, 1GB RAM, or 5GB Disk unclaimed
+
+    total_expanse_eps = len(expanse_ads)
+    cpus_exhausted = sum(ad["Cpus"] < 1 for ad in expanse_ads)
+    disk_exhausted = sum(ad['Disk'] < (5*1024*1024) for ad in expanse_ads)
+    mem_almost_exhausted = sum(ad['Memory'] < (2*1024) for ad in expanse_ads)
+    mem_completely_exhausted = sum(ad['Memory'] < (1*1024) for ad in expanse_ads)
+    almost_exhausted_expanse_eps = max([cpus_exhausted, disk_exhausted, mem_almost_exhausted])
+    completely_exhausted_expanse_eps = max([cpus_exhausted, disk_exhausted, mem_completely_exhausted])
+
+    return(total_expanse_eps, cpus_exhausted, disk_exhausted, mem_almost_exhausted, mem_completely_exhausted, almost_exhausted_expanse_eps, completely_exhausted_expanse_eps)
+
+
+def get_expanse_summary(total_expanse_eps, cpus_exhausted, disk_exhausted, mem_almost_exhausted, mem_completely_exhausted, almost_exhausted_expanse_eps, completely_exhausted_expanse_eps):
+    expanse_summary = {
+        "total_expanse_eps": total_expanse_eps,
+        "cpus_exhausted": cpus_exhausted,
+        "disk_exhausted": disk_exhausted,
+        "mem_almost_exhausted": mem_almost_exhausted,
+        "mem_completely_exhausted": mem_completely_exhausted,
+        "almost_exhausted_expanse_eps": almost_exhausted_expanse_eps,
+        "completely_exhausted_expanse_eps": completely_exhausted_expanse_eps,
+
+        "pct_expanse_exhausted": 100 * completely_exhausted_expanse_eps / total_expanse_eps,
+        "pct_expanse_almost_exhausted": 100 * almost_exhausted_expanse_eps / total_expanse_eps,
+        "pct_expanse_cpus_exhausted": 100 * cpus_exhausted / total_expanse_eps,
+        "pct_expanse_mem_exhausted": 100 * mem_completely_exhausted / total_expanse_eps,
+        "pct_expanse_mem_almost_exhausted": 100 * mem_almost_exhausted / total_expanse_eps,
+        "pct_expanse_disk_exhausted": 100 * disk_exhausted / total_expanse_eps,
+    }
+    return expanse_summary
+
+
 def push_mips_summary(mips_summary):
     es = elasticsearch.Elasticsearch()
     #index_client = elasticsearch.client.IndicesClient(es)
@@ -136,8 +179,15 @@ def main():
 
     data_objs = get_mips()
     mips_summary = get_mips_summary(*data_objs)
-    push_mips_summary(mips_summary)
-    #print(mips_summary)
+
+    expanse_objs = get_expanse()
+    expanse_summary = get_expanse_summary(*expanse_objs)
+
+    total_summary = mips_summary.copy()
+    total_summary.update(expanse_summary)
+
+    push_mips_summary(total_summary)
+    #print(total_summary)
 
 if __name__ == "__main__":
     main()
