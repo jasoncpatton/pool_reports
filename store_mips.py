@@ -85,6 +85,7 @@ def get_mips_summary(mips, resource_cores, site_cores, facility_cores, non_singu
         "mips_threshold": mips_threshold,
         "total_facilities": len(facility_cores),
         "total_sites": len(site_cores),
+        "total_resources": len(resource_cores),
         "top_3_core_resources": ",".join(resources_by_core_count[:3]),
         "top_3_core_facilities": ",".join(facilities_by_core_count[:3]),
         "top_3_core_sites": ",".join(sites_by_core_count[:3]),
