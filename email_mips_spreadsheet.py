@@ -48,10 +48,13 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "Num Insts", "Top Core Insts", "Total Cores", "Total MIPS", "Total Singularity Cores",
-                   "Sites w/o S'ty", "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
-                   "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
-                   "Slow MIPS", "Slow Cores", "Num Sites", "Top Core Sites", "Num Res", "Top Core Res"]
+    headers = ["Date", "Num Insts", "Top Core Insts", "Expanse EPs", "% Exht'd Exp EPs",
+                    "Total Cores", "Total MIPS", "Total Singularity Cores",
+                    "Sites w/o S'ty", "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
+                    "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
+                    "Slow MIPS", "Slow Cores",
+                    "% CPU Exht'd Exp EPs", "% Mem Exht'd Exp EPs", "% Disk Exht'd Exp EPs",
+                    "Num Sites", "Top Core Sites", "Num Res", "Top Core Res"]
     col_ids = OrderedDict(zip(headers, ascii_uppercase))
     header_key = {
         "Date": "date",
@@ -69,8 +72,13 @@ def write_xlsx_html(docs, xlsx_file):
         "Top Core Insts": "top_3_core_facilities",
         "Num Sites": "total_sites",
         "Top Core Sites": "top_3_core_sites",
-        "Num Resources": "total_resources",
+        "Num Res": "total_resources",
         "Top Core Res": "top_3_core_resources",
+        "Expanse EPs": "total_expanse_eps",
+        "% Exht'd Exp EPs": "pct_expanse_exhausted",
+        "% CPU Exht'd Exp EPs": "pct_expanse_cpus_exhausted",
+        "% Mem Exht'd Exp EPs": "pct_expanse_mem_exhausted",
+        "% Disk Exht'd Exp EPs": "pct_expanse_disk_exhausted"
     }
 
     workbook = xlsxwriter.Workbook(str(xlsx_file))
@@ -106,6 +114,13 @@ def write_xlsx_html(docs, xlsx_file):
                 else:
                     html += f'<td style="text-align: left; border: 1px solid black"></td>'
                     worksheet.write(row, col, "", text_format)
+            elif col_name in ("% Exht'd Exp EPs", "% CPU Exht'd Exp EPs", "% Mem Exht'd Exp EPs", "% Disk Exht'd Exp EPs"):
+                if header_key[col_name] in doc:
+                    html += f'<td style="text-align: right; border: 1px solid black">{float(doc[header_key[col_name]]):.1f}%</td>'
+                    worksheet.write(row, col, formula, pct_format)
+                else:
+                    html += f'<td style="text-align: right; border: 1px solid black"></td>'
+                    worksheet.write(row, col, "", pct_format)
             elif col_name in header_key:
                 if header_key[col_name] in doc:
                     html += f'<td style="text-align: right; border: 1px solid black">{int(doc[header_key[col_name]]):,}</td>'
