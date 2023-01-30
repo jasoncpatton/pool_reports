@@ -117,7 +117,7 @@ def write_xlsx_html(docs, xlsx_file):
             elif col_name in ("% Exht'd Exp EPs", "% CPU Exht'd Exp EPs", "% Mem Exht'd Exp EPs", "% Disk Exht'd Exp EPs"):
                 if header_key[col_name] in doc:
                     html += f'<td style="text-align: right; border: 1px solid black">{float(doc[header_key[col_name]]):.1f}%</td>'
-                    worksheet.write(row, col, formula, pct_format)
+                    worksheet.write(row, col, doc[header_key[col_name]], pct_format)
                 else:
                     html += f'<td style="text-align: right; border: 1px solid black"></td>'
                     worksheet.write(row, col, "", pct_format)
