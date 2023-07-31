@@ -207,19 +207,26 @@ def do_query(client, query):
 def get_timestamps():
     dates = OrderedDict()
 
-    def prev_month(dt):
+    def prev_month(dt, end_day):
         (year, month, day,) = dt.timetuple()[0:3]
         if month == 1:
             year -= 1
             month = 12
         else:
             month -= 1
+        if month in {9, 4, 6, 11} and day > 30:
+            day = 30
+        elif month == 2 and day > 28:
+            day = 28
+        else:
+            day = end_day
         return datetime(year, month, day)
 
     dt_end = datetime(*datetime.now().timetuple()[0:3])
+    dt_end_day = dt_end.day
     dt_stop = dt_end - timedelta(days=DAYS)
     while dt_end > dt_stop:
-        dt_start = prev_month(dt_end)
+        dt_start = prev_month(dt_end, dt_end_day)
         datestr = f"{dt_start.strftime('%Y-%m-%d')}"
         dates[datestr] = (dt_start, dt_end,)
         dt_end = dt_start
