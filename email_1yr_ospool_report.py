@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 from string import ascii_uppercase
 from pathlib import Path
+import requests
 import argparse
 import pickle
 import elasticsearch
@@ -12,6 +13,8 @@ from pull_topology import get_mappings
 from get_ospool_aps import get_ospool_aps, OSPOOL_COLLECTORS
 from email_functions import send_email
 
+
+NOW = datetime.now()
 
 TO = ["ospool-reports@path-cc.io"]
 TIMEOUT = 180
@@ -33,7 +36,8 @@ OSPOOL_NON_FAIRSHARE_RESOURCES = {
     "TACC-Frontera-CE2",
 }
 
-RESOURCE_TO_INSTITUION = get_mappings()["facility"]
+RESOURCE_TO_INSTITUTION = get_mappings()["facility"]
+PROJECT_TO_INSTITUTION = {k.casefold(): v for k, v in requests.get("https://topology.opensciencegrid.org/miscproject/json").json().items()}
 
 
 def get_daily_totals_query(start_dt, end_dt):
@@ -222,7 +226,7 @@ def get_timestamps():
             day = end_day
         return datetime(year, month, day)
 
-    dt_end = datetime(*datetime.now().timetuple()[0:3])
+    dt_end = datetime(*NOW.timetuple()[0:3])
     dt_end_day = dt_end.day
     dt_stop = dt_end - timedelta(days=DAYS)
     while dt_end > dt_stop:
@@ -239,7 +243,7 @@ def get_monthly_docs(client):
     docs = OrderedDict()
     timestamps = get_timestamps()
 
-    bucket_names = ["users", "projects", "institutions"]
+    bucket_names = ["users", "projects", "institutions_contrib", "institutions_benefit"]
     sum_names = ["total_jobs", "core_hours", "files_transferred"]
 
     docs["TOTAL"] = {sum_name: 0. for sum_name in sum_names}
@@ -247,6 +251,7 @@ def get_monthly_docs(client):
     total_datasets = {bucket_name: set() for bucket_name in bucket_names}
 
     unknown_resources = set()
+    unknown_projects = set()
 
     for datestr, (start_dt, end_dt,) in timestamps.items():
         docs[datestr] = {"date": datestr}
@@ -264,19 +269,30 @@ def get_monthly_docs(client):
         results = do_query(client, query)
 
         for bucket_name in bucket_names:
-            if bucket_name == "institutions":
+            if bucket_name == "institutions_benefit":
+                continue
+            if bucket_name == "institutions_contrib":
                 buckets = results.get("aggregations", {}).get("resources", {}).get("buckets", {})
             else:
                 buckets = results.get("aggregations", {}).get(bucket_name, {}).get("buckets", {})
             for bucket in buckets:
-                if bucket_name == "institutions":
-                    value = RESOURCE_TO_INSTITUION.get(bucket["key"], "UNKNOWN")
+                if bucket_name == "institutions_contrib":
+                    value = RESOURCE_TO_INSTITUTION.get(bucket["key"], "UNKNOWN")
                     if (value == "UNKNOWN") and (bucket["key"] != "UNKNOWN") and (bucket["key"] not in unknown_resources):
                         print(f"Unknown resource name: {bucket['key']}")
                         unknown_resources.add(bucket["key"])
                 elif bucket_name == "users" and '@' in bucket["key"]:
                     user, domain = bucket["key"].split("@")
                     value = user.casefold()
+                elif bucket_name == "projects":
+                    value = bucket["key"].casefold()
+                    project_info = PROJECT_TO_INSTITUTION.get(value)
+                    if project_info is not None:
+                        raw_datasets["institutions_benefit"].add(project_info["Organization"].casefold())
+                        total_datasets["institutions_benefit"].add(project_info["Organization"].casefold())
+                    elif value not in unknown_projects:
+                        unknown_projects.add(value)
+                        print(f"Project missing from institution map: {bucket['key']}")
                 else:
                     value = bucket["key"].casefold()
                 if value.casefold() in {"", "unknown"}:
@@ -284,6 +300,8 @@ def get_monthly_docs(client):
                 raw_datasets[bucket_name].add(value)
                 total_datasets[bucket_name].add(value)
             docs[datestr][bucket_name] = len(raw_datasets[bucket_name])
+            if bucket_name == "projects":
+                docs[datestr]["institutions_benefit"] = len(raw_datasets["institutions_benefit"])
 
     for bucket_name in bucket_names:
         print(f"{bucket_name}:")
@@ -302,7 +320,8 @@ def write_xlsx_html(docs, xlsx_file):
         ("Files Transferred", "files_transferred"),
         ("Unique Users", "users"),
         ("Unique Projects", "projects"),
-        ("Unique Institutions", "institutions"),
+        ("Unique Institutions Benefiting", "institutions_benefit"),
+        ("Unique Institutions Contributing", "institutions_contrib"),
     ])
     dbl_letters = [f"A{x}" for x in ascii_uppercase]
     col_ids = OrderedDict(zip(list(headers.values()), list(ascii_uppercase) + dbl_letters))
@@ -345,7 +364,7 @@ def write_xlsx_html(docs, xlsx_file):
     worksheet.set_row(0, 30)
     worksheet.set_column(f"{col_ids['date']}:{col_ids['date']}", 10)
     worksheet.set_column(f"{col_ids['total_jobs']}:{col_ids['files_transferred']}", 13)
-    worksheet.set_column(f"{col_ids['users']}:{col_ids['institutions']}", 9)
+    worksheet.set_column(f"{col_ids['users']}:{col_ids['institutions_contrib']}", 9)
 
     workbook.close()
 
@@ -366,7 +385,7 @@ def main():
     es = elasticsearch.Elasticsearch()
     docs = get_monthly_docs(es)
 
-    datestr = datetime.now().strftime("%Y-%m-%d")
+    datestr = NOW.strftime("%Y-%m-%d")
     xlsx_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_Summary.xlsx"
     html = write_xlsx_html(docs.values(), xlsx_file)
     subject = f"{datestr} OSPool 1-Year Summary"
