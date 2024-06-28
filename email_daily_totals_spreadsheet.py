@@ -15,6 +15,7 @@ ES_INDEX_NAME = "daily_totals"
 QUERY_ID = "OSG-schedd-job-history"
 REPORT_PERIOD = "daily"
 
+
 def get_query(query_id, report_period, days, now):
     query = {
         "size": days+1,
@@ -39,6 +40,7 @@ def get_query(query_id, report_period, days, now):
     }
     return query
 
+
 def do_query(es, index, body):
     result = es.search(index=index, body=body)
     docs = []
@@ -46,28 +48,33 @@ def do_query(es, index, body):
         docs.append(hit["_source"])
     return docs
 
+
 def write_xlsx_html(docs, xlsx_file):
     headers = OrderedDict([
         ("Date", "date"),
-        ("All CPU Hours", "all_cpu_hours"),
-        ("% Good CPU Hours", "pct_good_cpu_hours"),
         ("Num Proj", "num_projects"),
         ("Num Users", "num_users"),
         ("Num Insts", "num_institutions"),
         ("Num Sites", "num_sites"),
         ("Num Acc Pts", "num_schedds"),
         ("Num Jobs", "num_uniq_job_ids"),
+        ("All CPU Hours", "all_cpu_hours"),
+        ("% Good CPU Hours", "pct_good_cpu_hours"),
+        ("Job Unit Hours", "job_unit_hours"),
         ("% Ckpt Able", "pct_ckpt_able"),
         ("% Rm'd Jobs", "pct_rmed_jobs"),
+        ("Total Files Xferd", "total_files_xferd"),
+        ("OSDF Files Xferd", "osdf_files_xferd"),
+        ("% OSDF Files", "pct_osdf_files"),
+        ("% OSDF Bytes", "pct_osdf_bytes"),
+        ("Shadw Starts / Job Id", "shadw_starts_per_job_id"),
+        ("Exec Att / Shadw Start", "exec_atts_per_shadw_start"),
+        ("Holds / Job Id", "holds_per_job_id"),
         ("% Short Jobs", "pct_short_jobs"),
         ("% Jobs w/ 2+ Exec Att", "pct_jobs_with_more_than_1_exec_att"),
         ("% Jobs w/ 1+ Holds", "pct_jobs_with_1+_holds"),
         ("% Jobs Over Rqst Disk", "pct_jobs_over_rqst_disk"),
         ("% S'ty Jobs", "pct_jobs_using_s'ty"),
-        ("Total Files Xferd", "total_files_xferd"),
-        ("Shadw Starts / Job Id", "shadw_starts_per_job_id"),
-        ("Exec Att / Shadw Start", "exec_atts_per_shadw_start"),
-        ("Holds / Job Id", "holds_per_job_id"),
         ("Mean Actv Hrs", "mean_actv_hrs"),
         ("Mean Setup Secs", "mean_setup_secs"),
         ("25th % Hrs", "25pct_hrs"),
@@ -139,7 +146,7 @@ def write_xlsx_html(docs, xlsx_file):
                 else:
                     html += f'<td style="text-align: right; border: 1px solid black">{int(float(doc[headers[col_name]])):,}</td>'
                     worksheet.write(row, col, int(float(doc[headers[col_name]])), int_format)
-            elif (col_name == "All CPU Hours") or (col_name[0:3] == "Num") or (col_name[0:5] == "Total"):
+            elif (col_name in {"All CPU Hours", "Job Unit Hours"}) or any(col_name.startswith(x) for x in ["Num", "Total", "OSDF"]):
                 html += f'<td style="text-align: right; border: 1px solid black">{int(doc[headers[col_name]]):,}</td>'
                 worksheet.write(row, col, doc[headers[col_name]], int_format)
             elif " / " in col_name:
@@ -188,6 +195,7 @@ def main():
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"{days}-day OSPool Totals Summary from {(now - timedelta(days=days)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
     send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file])
+
 
 if __name__ == "__main__":
     main()
