@@ -2,17 +2,18 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 from string import ascii_uppercase
 from pathlib import Path
-import requests
 import argparse
-import pickle
 import elasticsearch
 import xlsxwriter
-import sys
 
-from pull_topology import get_mappings
-from get_ospool_aps import get_ospool_aps, OSPOOL_COLLECTORS
-from email_functions import send_email
-
+from functions import (
+    get_topology_project_data,
+    get_topology_resource_data,
+    get_ospool_aps,
+    OSPOOL_COLLECTORS,
+    NON_OSPOOL_RESOURCES,
+    send_email
+)
 
 NOW = datetime.now()
 
@@ -27,17 +28,9 @@ OSPOOL_DAILY_REPORT_PERIOD = "daily"
 OSPOOL_RAW_DATA_INDEX = "osg_schedd_write"
 
 OSPOOL_APS = get_ospool_aps()
-OSPOOL_NON_FAIRSHARE_RESOURCES = {
-    "SURFsara",
-    "NIKHEF-ELPROD",
-    "INFN-T1",
-    "IN2P3-CC",
-    "UIUC-ICC-SPT",
-    "TACC-Frontera-CE2",
-}
 
-RESOURCE_TO_INSTITUTION = get_mappings()["facility"]
-PROJECT_TO_INSTITUTION = {k.casefold(): v for k, v in requests.get("https://topology.opensciencegrid.org/miscproject/json").json().items()}
+RESOURCE_MAP = get_topology_resource_data()
+PROJECT_MAP = get_topology_project_data()
 
 
 def get_daily_totals_query(start_dt, end_dt):
@@ -171,7 +164,7 @@ def get_raw_data_query(start_dt, end_dt):
                 ],
                 "must_not": [
                     {"terms": {
-                        "ResourceName": list(OSPOOL_NON_FAIRSHARE_RESOURCES)
+                        "ResourceName": list(NON_OSPOOL_RESOURCES)
                     }},
                 ],
             }
@@ -180,13 +173,13 @@ def get_raw_data_query(start_dt, end_dt):
     return query
 
 
-def print_error(d, depth=0):
+def print_error(d: dict, depth=0):
     pre = depth*"\t"
     for k, v in d.items():
-        if k == "failed_shards":
+        if k == "failed_shards" and len(v) > 0:
             print(f"{pre}{k}:")
             print_error(v[0], depth=depth+1)
-        elif k == "root_cause":
+        elif k == "root_cause" and len(v) > 0:
             print(f"{pre}{k}:")
             print_error(v[0], depth=depth+1)
         elif isinstance(v, dict):
@@ -245,8 +238,9 @@ def get_monthly_docs(client):
 
     bucket_names = ["users", "projects", "institutions_contrib", "institutions_benefit"]
     sum_names = ["total_jobs", "core_hours", "files_transferred"]
+    count_names = ["unknown_projects", "unknown_institutions"]
 
-    docs["TOTAL"] = {sum_name: 0. for sum_name in sum_names}
+    docs["TOTAL"] = {name: 0. for name in sum_names + count_names}
     docs["TOTAL"]["date"] = "TOTAL"
     total_datasets = {bucket_name: set() for bucket_name in bucket_names}
 
@@ -264,6 +258,11 @@ def get_monthly_docs(client):
             docs[datestr][sum_name] = value
             docs["TOTAL"][sum_name] += value
 
+        for count_name in count_names:
+            if count_name not in docs["TOTAL"]:
+                docs["TOTAL"][count_name] = 0
+            docs[datestr][count_name] = 0
+
         raw_datasets = {bucket_name: set() for bucket_name in bucket_names}
         query = get_raw_data_query(start_dt, end_dt)
         results = do_query(client, query)
@@ -277,25 +276,32 @@ def get_monthly_docs(client):
                 buckets = results.get("aggregations", {}).get(bucket_name, {}).get("buckets", {})
             for bucket in buckets:
                 if bucket_name == "institutions_contrib":
-                    value = RESOURCE_TO_INSTITUTION.get(bucket["key"], "UNKNOWN")
+                    value = RESOURCE_MAP.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
                     if (value == "UNKNOWN") and (bucket["key"] != "UNKNOWN") and (bucket["key"] not in unknown_resources):
                         print(f"Unknown resource name: {bucket['key']}")
                         unknown_resources.add(bucket["key"])
                 elif bucket_name == "users" and '@' in bucket["key"]:
-                    user, domain = bucket["key"].split("@")
-                    value = user.casefold()
+                    user = bucket["key"].split("@", maxsplit=1)[0]
+                    value = user.lower()
                 elif bucket_name == "projects":
-                    value = bucket["key"].casefold()
-                    project_info = PROJECT_TO_INSTITUTION.get(value)
+                    project = bucket["key"].lower()
+                    project_info = PROJECT_MAP.get(project)
                     if project_info is not None:
-                        raw_datasets["institutions_benefit"].add(project_info["Organization"].casefold())
-                        total_datasets["institutions_benefit"].add(project_info["Organization"].casefold())
-                    elif value not in unknown_projects:
-                        unknown_projects.add(value)
+                        project_institution = project_info["pi_institution"]
+                        raw_datasets["institutions_benefit"].add(project_institution)
+                        total_datasets["institutions_benefit"].add(project_institution)
+                    elif project not in unknown_projects:
+                        unknown_projects.add(project)
                         print(f"Project missing from institution map: {bucket['key']}")
+                    if project == "unknown":
+                        docs[datestr]["unknown_projects"] += bucket["value_count"]
+                        docs["TOTAL"]["unknown_projects"] += bucket["value_count"]
+                    elif project not in PROJECT_MAP:
+                        docs[datestr]["unknown_institutions"] += bucket["value_count"]
+                        docs["TOTAL"]["unknown_institutions"] += bucket["value_count"]
                 else:
-                    value = bucket["key"].casefold()
-                if value.casefold() in {"", "unknown"}:
+                    value = bucket["key"].lower()
+                if value.lower() in {"", "unknown"}:
                     continue
                 raw_datasets[bucket_name].add(value)
                 total_datasets[bucket_name].add(value)
@@ -322,6 +328,8 @@ def write_xlsx_html(docs, xlsx_file):
         ("Unique Projects", "projects"),
         ("Unique Institutions Benefiting", "institutions_benefit"),
         ("Unique Institutions Contributing", "institutions_contrib"),
+        ("Unknown Project Jobs", "unknown_projects"),
+        ("Unknown Institution Jobs", "unknown_institutions"),
     ])
     dbl_letters = [f"A{x}" for x in ascii_uppercase]
     col_ids = OrderedDict(zip(list(headers.values()), list(ascii_uppercase) + dbl_letters))
@@ -334,7 +342,7 @@ def write_xlsx_html(docs, xlsx_file):
     header_format = workbook.add_format({"text_wrap": True, "align": "center"})
     date_format = workbook.add_format({"num_format": "yyyy-mm-dd"})
     int_format = workbook.add_format({"num_format": "#,##0"})
-    float_format = workbook.add_format({"num_format": "#,##0.00"})
+    # float_format = workbook.add_format({"num_format": "#,##0.00"})
     row = 0
     html += "<tr>"
     for col, header in enumerate(headers):
@@ -346,10 +354,10 @@ def write_xlsx_html(docs, xlsx_file):
         html += "<tr>"
         for col, col_name in enumerate(headers):
             if not (headers[col_name] in doc):
-                html += f'<td style="border: 1px solid black"></td>'
+                html += '<td style="border: 1px solid black"></td>'
                 worksheet.write(row, col, "")
             elif (headers[col_name] == "date" and row == 1):  # TOTAL column
-                html += f'<td style="border: 1px solid black">TOTAL</td>'
+                html += '<td style="border: 1px solid black">TOTAL</td>'
                 worksheet.write(row, col, "TOTAL")
             elif (headers[col_name] == "date"):
                 date_str = doc[headers[col_name]]
@@ -389,7 +397,14 @@ def main():
     xlsx_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_Summary.xlsx"
     html = write_xlsx_html(docs.values(), xlsx_file)
     subject = f"{datestr} OSPool 1-Year Summary"
-    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file])
+    send_email(
+        subject=subject,
+        from_addr="accounting@chtc.wisc.edu",
+        to_addrs=to,
+        html=html,
+        replyto_addr="ospool-reports@path-cc.io",
+        attachments=[xlsx_file]
+    )
 
 if __name__ == "__main__":
     main()
