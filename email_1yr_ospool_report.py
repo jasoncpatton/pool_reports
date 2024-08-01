@@ -294,11 +294,11 @@ def get_monthly_docs(client):
                         unknown_projects.add(project)
                         print(f"Project missing from institution map: {bucket['key']}")
                     if project == "unknown":
-                        docs[datestr]["unknown_projects"] += bucket["value_count"]
-                        docs["TOTAL"]["unknown_projects"] += bucket["value_count"]
+                        docs[datestr]["unknown_projects"] += bucket["doc_count"]
+                        docs["TOTAL"]["unknown_projects"] += bucket["doc_count"]
                     elif project not in PROJECT_MAP:
-                        docs[datestr]["unknown_institutions"] += bucket["value_count"]
-                        docs["TOTAL"]["unknown_institutions"] += bucket["value_count"]
+                        docs[datestr]["unknown_institutions"] += bucket["doc_count"]
+                        docs["TOTAL"]["unknown_institutions"] += bucket["doc_count"]
                 else:
                     value = bucket["key"].lower()
                 if value.lower() in {"", "unknown"}:
