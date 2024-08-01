@@ -378,12 +378,12 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
 
     html += "</table>"
 
-    html += "<h1>Benefitting institutions</h1><ol>"
+    html += "<h2>Benefitting institutions over the last year</h2><ol>"
     for value in sorted(list(total_datasets["institutions_benefit"])):
         html += f"<li>{value}</li>"
     html += "</ol>"
 
-    html += "<h1>Contributing institutions</h1><ol>"
+    html += "<h2>Contributing institutions over the last year</h2><ol>"
     for value in sorted(list(total_datasets["institutions_contrib"])):
         html += f"<li>{value}</li>"
     html += "</ol>"
