@@ -315,10 +315,10 @@ def get_monthly_docs(client):
             print(f"\t{i+1}. {value}")
         docs["TOTAL"][bucket_name] = len(total_datasets[bucket_name])
 
-    return docs
+    return docs, total_datasets
 
 
-def write_xlsx_html(docs, xlsx_file):
+def write_xlsx_html(docs, total_datasets, xlsx_file):
     headers = OrderedDict([
         ("Month Starting", "date"),
         ("Jobs Completed", "total_jobs"),
@@ -329,7 +329,7 @@ def write_xlsx_html(docs, xlsx_file):
         ("Unique Institutions Benefiting", "institutions_benefit"),
         ("Unique Institutions Contributing", "institutions_contrib"),
         ("Unknown Project Jobs", "unknown_projects"),
-        ("Unknown Institution Jobs", "unknown_institutions"),
+        ("Unknown Project Institution Jobs", "unknown_institutions"),
     ])
     dbl_letters = [f"A{x}" for x in ascii_uppercase]
     col_ids = OrderedDict(zip(list(headers.values()), list(ascii_uppercase) + dbl_letters))
@@ -376,7 +376,19 @@ def write_xlsx_html(docs, xlsx_file):
 
     workbook.close()
 
-    html += "</table></body></html>"
+    html += "</table>"
+
+    html += "<h1>Benefitting institutions</h1><ol>"
+    for value in sorted(list(total_datasets["institutions_benefit"])):
+        html += f"<li>{value}</li>"
+    html += "</ol>"
+
+    html += "<h1>Contributing institutions</h1><ol>"
+    for value in sorted(list(total_datasets["institutions_contrib"])):
+        html += f"<li>{value}</li>"
+    html += "</ol>"
+
+    html += "</body></html>"
     return html
 
 
@@ -391,11 +403,11 @@ def main():
     to = args.to or TO
 
     es = elasticsearch.Elasticsearch()
-    docs = get_monthly_docs(es)
+    docs, total_datasets = get_monthly_docs(es)
 
     datestr = NOW.strftime("%Y-%m-%d")
     xlsx_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_Summary.xlsx"
-    html = write_xlsx_html(docs.values(), xlsx_file)
+    html = write_xlsx_html(docs.values(), total_datasets, xlsx_file)
     subject = f"{datestr} OSPool 1-Year Summary"
     send_email(
         subject=subject,
