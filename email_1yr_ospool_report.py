@@ -299,6 +299,7 @@ def get_monthly_docs(client):
                     elif project not in PROJECT_MAP:
                         docs[datestr]["unknown_institutions"] += bucket["doc_count"]
                         docs["TOTAL"]["unknown_institutions"] += bucket["doc_count"]
+                    value = project
                 else:
                     value = bucket["key"].lower()
                 if value.lower() in {"", "unknown"}:
