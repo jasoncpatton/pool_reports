@@ -171,6 +171,7 @@ def parse_args():
     parser.add_argument("--smtp-server")
     parser.add_argument("--smtp-username")
     parser.add_argument("--smtp-password-file", type=Path)
+    parser.add_argument("--from-addr", default="accounting@chtc.wisc.edu")
     return parser.parse_args()
 
 
@@ -186,7 +187,7 @@ def main():
     docs.sort(key = lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"), reverse=True)
     html = write_xlsx_html(docs, xlsx_file)
     subject = f"{days}-day {POOL_NAME} MIPS Summary from {(now - timedelta(days=days)).strftime('%Y-%m-%d')} to {(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
-    send_email(from_addr="accounting@chtc.wisc.edu", to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file],
+    send_email(from_addr=args.from_addr, to_addrs=to, replyto_addr="ospool-reports@path-cc.io", subject=subject, html=html, attachments=[xlsx_file],
                 smtp_server=args.smtp_server, smtp_username=args.smtp_username, smtp_password_file=args.smtp_password_file)
 
 
