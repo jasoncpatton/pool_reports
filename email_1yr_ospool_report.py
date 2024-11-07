@@ -9,6 +9,7 @@ import xlsxwriter
 from functions import (
     get_topology_project_data,
     get_topology_resource_data,
+    get_prp_mapping_data,
     get_ospool_aps,
     OSPOOL_COLLECTORS,
     NON_OSPOOL_RESOURCES,
@@ -31,6 +32,7 @@ OSPOOL_APS = get_ospool_aps()
 
 RESOURCE_MAP = get_topology_resource_data()
 PROJECT_MAP = get_topology_project_data()
+OSG_ID_MAP = get_prp_mapping_data()
 
 
 def get_daily_totals_query(start_dt, end_dt):
@@ -130,6 +132,13 @@ def get_raw_data_query(start_dt, end_dt):
                     "size": 1024,
                 }
             },
+            "resource_ids": {
+                "terms": {
+                    "field": "MachineAttrOSG_INSTITUTION_ID0.keyword",
+                    "missing": "UNKNOWN",
+                    "size": 1024,
+                }
+            }
         },
         "query": {
             "bool": {
@@ -196,7 +205,10 @@ def do_query(client, query):
     try:
         result = client.search(index=query.pop("index"), body=query, request_timeout=TIMEOUT)
     except Exception as e:
-        print_error(e.info)
+        try:
+            print_error(e.info)
+        except Exception:
+            pass
         raise
     return result
 
@@ -227,7 +239,7 @@ def get_timestamps():
         datestr = f"{dt_start.strftime('%Y-%m-%d')}"
         dates[datestr] = (dt_start, dt_end,)
         dt_end = dt_start
-    
+
     return dates
 
 
@@ -271,12 +283,17 @@ def get_monthly_docs(client):
             if bucket_name == "institutions_benefit":
                 continue
             if bucket_name == "institutions_contrib":
-                buckets = results.get("aggregations", {}).get("resources", {}).get("buckets", {})
+                buckets = results.get("aggregations", {}).get("resources", {}).get("buckets", [])
+                buckets += results.get("aggregations", {}).get("resource_ids", {}).get("buckets", [])
             else:
-                buckets = results.get("aggregations", {}).get(bucket_name, {}).get("buckets", {})
+                buckets = results.get("aggregations", {}).get(bucket_name, {}).get("buckets", [])
+
             for bucket in buckets:
                 if bucket_name == "institutions_contrib":
-                    value = RESOURCE_MAP.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
+                    if "osg-htc.org_" in bucket["key"]:  # use resource ID
+                        value = OSG_ID_MAP.get(bucket["key"].split("_")[-1], "UNKNOWN")
+                    else:
+                        value = RESOURCE_MAP.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
                     if (value == "UNKNOWN") and (bucket["key"] != "UNKNOWN") and (bucket["key"] not in unknown_resources):
                         print(f"Unknown resource name: {bucket['key']}")
                         unknown_resources.add(bucket["key"])
