@@ -1,6 +1,7 @@
 import re
 import sys
 import time
+import json
 import pickle
 import smtplib
 import xml.etree.ElementTree as ET
@@ -19,6 +20,7 @@ from dns.resolver import query as dns_query
 
 TOPOLOGY_PROJECT_DATA_URL = "https://topology.opensciencegrid.org/miscproject/xml"
 TOPOLOGY_RESOURCE_DATA_URL = "https://topology.opensciencegrid.org/rgsummary/xml"
+INSTITUTION_IDS_DATA_URL = "https://topology-institutions.osg-htc.org/api/institution_ids"
 
 OSPOOL_APS = {
     "ap20.uc.osg-htc.org",
@@ -151,18 +153,63 @@ def get_topology_resource_data(cache_file=Path("./topology_resource_data.pickle"
     for resource_group in resource_groups:
         resource_institution = resource_group.find("Facility").find("Name").text
         resource_institution_id = resource_group.find("Facility").find("ID").text
+        resource_institution_osg_id = resource_group.find("Facility").find("InstitutionID").text
 
         resources = resource_group.find("Resources")
         for resource in resources:
             resource_map = {}
             resource_map["institution"] = resource_institution
             resource_map["institution_id"] = resource_institution_id
+            resource_map["osg_id"] = resource_institution_osg_id
             resource_map["name"] = resource.find("Name").text
             resource_map["id"] = resource.find("ID").text
             resources_map[resource_map["name"].lower()] = resource_map.copy()
 
     pickle.dump(resources_map, cache_file.open("wb"))
     return resources_map
+
+
+def get_prp_mapping_data(cache_file=Path("./prp_data_map.pickle")) -> dict:
+    if cache_file.exists() and cache_file.stat().st_mtime > time.time() - 23*3600:
+        try:
+            prp_id_map = pickle.load(cache_file.open("rb"))
+        except Exception:
+            pass
+        else:
+            return prp_id_map
+
+    topology_resource_map = get_topology_resource_data()
+    osg_id_institution_map = {d.get("osg_id"): d.get("institution") for d in topology_resource_map.values()}
+    prp_id_map = {}
+    tries = 0
+    max_tries = 5
+    while tries < max_tries:
+        try:
+            with urlopen(INSTITUTION_IDS_DATA_URL) as f:
+                for resource in json.load(f):
+                    osg_id = resource.get("id")
+                    if not osg_id:
+                        continue
+                    institution = osg_id_institution_map.get(osg_id, resource.get("name"))
+                    if not institution:
+                        continue
+                    osg_id_short = osg_id.split("/")[-1]
+                    prp_id_map[osg_id_short] = institution
+                    # OSG_INSTITUTION_IDS mistakenly had the ROR IDs before ~2024-11-07,
+                    # so we map those too (as long as they don't conflict with OSG IDs)
+                    ror_id_short = (resource.get("ror_id") or "").split("/")[-1]
+                    if ror_id_short and ror_id_short not in prp_id_map:
+                        prp_id_map[ror_id_short] = institution
+        except HTTPError:
+            time.sleep(2**tries)
+            tries += 1
+            if tries == max_tries:
+                raise
+        else:
+            break
+
+    pickle.dump(prp_id_map, cache_file.open("wb"))
+    return prp_id_map
 
 
 def get_ospool_aps() -> set:
