@@ -108,7 +108,24 @@ def get_raw_data_query(start_dt, end_dt):
                         emit(res);
                         """,
                 }
-            }
+            },
+            "ProjectNameFixed": {
+                "type": "keyword",
+                "script": {
+                    "language": "painless",
+                    "source": """
+                        String res;
+                        if (doc.containsKey("projectname") && doc["projectname.keyword"].size() > 0) {
+                            res = doc["projectname.keyword"].value;
+                        } else if (doc.containsKey("ProjectName") && doc["ProjectName.keyword"].size() > 0) {
+                            res = doc["ProjectName.keyword"].value;
+                        } else {
+                            res = "UNKNOWN";
+                        }
+                        emit(res);
+                        """,
+                }
+            },
         },
         "aggs": {
             "users": {
@@ -127,7 +144,7 @@ def get_raw_data_query(start_dt, end_dt):
             },
             "projects": {
                 "terms": {
-                    "field": "ProjectName.keyword",
+                    "field": "ProjectNameFixed",
                     "missing": "UNKNOWN",
                     "size": 1024,
                 }
