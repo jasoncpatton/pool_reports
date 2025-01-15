@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 from string import ascii_uppercase
 from pathlib import Path
+from operator import itemgetter
 import argparse
 import elasticsearch
 import xlsxwriter
@@ -141,12 +142,26 @@ def get_raw_data_query(start_dt, end_dt):
                     "missing": "UNKNOWN",
                     "size": 1024,
                 },
+                "aggs": {
+                    "last_seen": {
+                        "max": {
+                            "field": "RecordTime",
+                        }
+                    }
+                }
             },
             "projects": {
                 "terms": {
                     "field": "ProjectNameFixed",
                     "missing": "UNKNOWN",
                     "size": 1024,
+                },
+                "aggs": {
+                    "last_seen": {
+                        "max": {
+                            "field": "RecordTime",
+                        }
+                    }
                 }
             },
             "resource_ids": {
@@ -154,6 +169,13 @@ def get_raw_data_query(start_dt, end_dt):
                     "field": "MachineAttrOSG_INSTITUTION_ID0.keyword",
                     "missing": "UNKNOWN",
                     "size": 1024,
+                },
+                "aggs": {
+                    "last_seen": {
+                        "max": {
+                            "field": "RecordTime",
+                        }
+                    }
                 }
             }
         },
@@ -267,14 +289,19 @@ def get_monthly_docs(client):
 
     bucket_names = ["users", "projects", "institutions_contrib", "institutions_benefit"]
     sum_names = ["total_jobs", "core_hours", "files_transferred"]
-    count_names = ["unknown_projects", "unknown_institutions"]
+    count_names = ["unmapped_projects", "unmapped_institutions"]
 
     docs["TOTAL"] = {name: 0. for name in sum_names + count_names}
     docs["TOTAL"]["date"] = "TOTAL"
     total_datasets = {bucket_name: set() for bucket_name in bucket_names}
 
-    unknown_resources = set()
-    unknown_projects = set()
+    unmapped_resources = {}
+    undefined_resources_total = 0
+    undefined_resources_last_seen = 0
+    unmapped_projects = {}
+    undefined_projects_total = 0
+    undefined_projects_last_seen = 0
+
 
     for datestr, (start_dt, end_dt,) in timestamps.items():
         docs[datestr] = {"date": datestr}
@@ -306,14 +333,21 @@ def get_monthly_docs(client):
                 buckets = results.get("aggregations", {}).get(bucket_name, {}).get("buckets", [])
 
             for bucket in buckets:
+                name_or_id = "name"
                 if bucket_name == "institutions_contrib":
                     if "osg-htc.org_" in bucket["key"]:  # use resource ID
+                        name_or_id = "ID"
                         value = OSG_ID_MAP.get(bucket["key"].split("_")[-1], "UNKNOWN")
                     else:
                         value = RESOURCE_MAP.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
-                    if (value == "UNKNOWN") and (bucket["key"] != "UNKNOWN") and (bucket["key"] not in unknown_resources):
-                        print(f"Unknown resource name: {bucket['key']}")
-                        unknown_resources.add(bucket["key"])
+                    if (value == "UNKNOWN") and (bucket["key"] != "UNKNOWN"):
+                        if bucket["key"] not in unmapped_resources:
+                            print(f"Unmapped resource {name_or_id}: {bucket['key']}")
+                            unmapped_resources[bucket["key"]] = 0
+                        unmapped_resources[bucket["key"]] = max(unmapped_resources[bucket["key"]], bucket.get("last_seen", {"value": 0})["value"])
+                    elif (bucket["key"] == "UNKNOWN"):
+                        undefined_resources_total += bucket["doc_count"]
+                        undefined_resources_last_seen = max(undefined_resources_last_seen, bucket.get("last_seen", {"value": 0})["value"])
                 elif bucket_name == "users" and '@' in bucket["key"]:
                     user = bucket["key"].split("@", maxsplit=1)[0]
                     value = user.lower()
@@ -324,15 +358,18 @@ def get_monthly_docs(client):
                         project_institution = project_info["pi_institution"]
                         raw_datasets["institutions_benefit"].add(project_institution)
                         total_datasets["institutions_benefit"].add(project_institution)
-                    elif project not in unknown_projects:
-                        unknown_projects.add(project)
-                        print(f"Project missing from institution map: {bucket['key']}")
-                    if project == "unknown":
-                        docs[datestr]["unknown_projects"] += bucket["doc_count"]
-                        docs["TOTAL"]["unknown_projects"] += bucket["doc_count"]
+                    if bucket["key"] == "UNKNOWN":
+                        undefined_projects_total += bucket["doc_count"]
+                        undefined_projects_last_seen = max(undefined_projects_last_seen, bucket.get("last_seen", {"value": 0})["value"])
+                        docs[datestr]["unmapped_projects"] += bucket["doc_count"]
+                        docs["TOTAL"]["unmapped_projects"] += bucket["doc_count"]
                     elif project not in PROJECT_MAP:
-                        docs[datestr]["unknown_institutions"] += bucket["doc_count"]
-                        docs["TOTAL"]["unknown_institutions"] += bucket["doc_count"]
+                        if project not in unmapped_projects:
+                            print(f"Project missing from institution map: {bucket['key']}")
+                            unmapped_projects[bucket["key"]] = 0
+                        unmapped_projects[bucket["key"]] = max(unmapped_projects[bucket["key"]], bucket.get("last_seen", {"value": 0})["value"])
+                        docs[datestr]["unmapped_institutions"] += bucket["doc_count"]
+                        docs["TOTAL"]["unmapped_institutions"] += bucket["doc_count"]
                     value = project
                 else:
                     value = bucket["key"].lower()
@@ -350,6 +387,9 @@ def get_monthly_docs(client):
             print(f"\t{i+1}. {value}")
         docs["TOTAL"][bucket_name] = len(total_datasets[bucket_name])
 
+    docs["TOTAL"]["unmapped_resources_dict"] = unmapped_resources
+    docs["TOTAL"]["unmapped_projects_dict"] = unmapped_projects
+
     return docs, total_datasets
 
 
@@ -363,8 +403,8 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
         ("Unique Projects", "projects"),
         ("Unique Institutions Benefiting", "institutions_benefit"),
         ("Unique Institutions Contributing", "institutions_contrib"),
-        ("Unknown Project Jobs", "unknown_projects"),
-        ("Unknown Project Institution Jobs", "unknown_institutions"),
+        ("Unknown Project Jobs", "unmapped_projects"),
+        ("Unknown Project Institution Jobs", "unmapped_institutions"),
     ])
     dbl_letters = [f"A{x}" for x in ascii_uppercase]
     col_ids = OrderedDict(zip(list(headers.values()), list(ascii_uppercase) + dbl_letters))
@@ -427,6 +467,12 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
     return html
 
 
+def write_unmapped_dict(d: dict, text_file: Path):
+    with text_file.open("w") as f:
+        for value, last_seen in sorted(list(d.items()), key=itemgetter(1), reverse=True):
+            f.write(f"{datetime.fromtimestamp(last_seen).strftime('%Y-%m-%d')} {value}\n")
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--to", action="append")
@@ -442,7 +488,11 @@ def main():
 
     datestr = NOW.strftime("%Y-%m-%d")
     xlsx_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_Summary.xlsx"
+    unmapped_resources_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_unmapped_resources.txt"
+    unmapped_projects_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_unmapped_projects.txt"
     html = write_xlsx_html(docs.values(), total_datasets, xlsx_file)
+    write_unmapped_dict(docs["TOTAL"]["unmapped_resources_dict"], unmapped_resources_file)
+    write_unmapped_dict(docs["TOTAL"]["unmapped_projects_dict"], unmapped_projects_file)
     subject = f"{datestr} OSPool 1-Year Summary"
     send_email(
         subject=subject,
@@ -450,8 +500,12 @@ def main():
         to_addrs=to,
         html=html,
         replyto_addr="ospool-reports@path-cc.io",
-        attachments=[xlsx_file]
+        attachments=[xlsx_file, unmapped_resources_file, unmapped_projects_file]
     )
+
+    with open("last_1yr_summary.html", "w") as f:
+        f.write(html)
+
 
 if __name__ == "__main__":
     main()
