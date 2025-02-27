@@ -140,12 +140,12 @@ def get_expanse_summary(total_expanse_eps, cpus_exhausted, disk_exhausted, mem_a
         "almost_exhausted_expanse_eps": almost_exhausted_expanse_eps,
         "completely_exhausted_expanse_eps": completely_exhausted_expanse_eps,
 
-        "pct_expanse_exhausted": 100 * completely_exhausted_expanse_eps / total_expanse_eps,
-        "pct_expanse_almost_exhausted": 100 * almost_exhausted_expanse_eps / total_expanse_eps,
-        "pct_expanse_cpus_exhausted": 100 * cpus_exhausted / total_expanse_eps,
-        "pct_expanse_mem_exhausted": 100 * mem_completely_exhausted / total_expanse_eps,
-        "pct_expanse_mem_almost_exhausted": 100 * mem_almost_exhausted / total_expanse_eps,
-        "pct_expanse_disk_exhausted": 100 * disk_exhausted / total_expanse_eps,
+        "pct_expanse_exhausted": 100 * completely_exhausted_expanse_eps / total_expanse_eps if total_expanse_eps > 0 else 0,
+        "pct_expanse_almost_exhausted": 100 * almost_exhausted_expanse_eps / total_expanse_eps if total_expanse_eps > 0 else 0,
+        "pct_expanse_cpus_exhausted": 100 * cpus_exhausted / total_expanse_eps if total_expanse_eps > 0 else 0,
+        "pct_expanse_mem_exhausted": 100 * mem_completely_exhausted / total_expanse_eps if total_expanse_eps > 0 else 0,
+        "pct_expanse_mem_almost_exhausted": 100 * mem_almost_exhausted / total_expanse_eps if total_expanse_eps > 0 else 0,
+        "pct_expanse_disk_exhausted": 100 * disk_exhausted / total_expanse_eps if total_expanse_eps > 0 else 0,
     }
     return expanse_summary
 
