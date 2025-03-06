@@ -10,7 +10,7 @@ import xlsxwriter
 from functions import (
     get_topology_project_data,
     get_topology_resource_data,
-    get_prp_mapping_data,
+    get_institution_database,
     get_ospool_aps,
     OSPOOL_COLLECTORS,
     NON_OSPOOL_RESOURCES,
@@ -31,9 +31,9 @@ OSPOOL_RAW_DATA_INDEX = "osg_schedd_write"
 
 OSPOOL_APS = get_ospool_aps()
 
-RESOURCE_MAP = get_topology_resource_data()
-PROJECT_MAP = get_topology_project_data()
-OSG_ID_MAP = get_prp_mapping_data()
+RESOURCE_DATA = get_topology_resource_data()
+PROJECT_DATA = get_topology_project_data()
+INSTITUTION_DB = get_institution_database()
 
 
 def get_daily_totals_query(start_dt, end_dt):
@@ -337,9 +337,9 @@ def get_monthly_docs(client):
                 if bucket_name == "institutions_contrib":
                     if "osg-htc.org_" in bucket["key"]:  # use resource ID
                         name_or_id = "ID"
-                        value = OSG_ID_MAP.get(bucket["key"].split("_")[-1], "UNKNOWN")
+                        value = INSTITUTION_DB.get(bucket["key"].split("_")[-1], {}).get("name", "UNKNOWN")
                     else:
-                        value = RESOURCE_MAP.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
+                        value = RESOURCE_DATA.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
                     if (value == "UNKNOWN") and (bucket["key"] != "UNKNOWN"):
                         if bucket["key"] not in unmapped_resources:
                             print(f"Unmapped resource {name_or_id}: {bucket['key']}")
@@ -353,9 +353,9 @@ def get_monthly_docs(client):
                     value = user.lower()
                 elif bucket_name == "projects":
                     project = bucket["key"].lower()
-                    project_info = PROJECT_MAP.get(project)
+                    project_info = PROJECT_DATA.get(project)
                     if project_info is not None:
-                        project_institution = project_info["pi_institution"]
+                        project_institution = project_info["institution"]
                         raw_datasets["institutions_benefit"].add(project_institution)
                         total_datasets["institutions_benefit"].add(project_institution)
                     if bucket["key"] == "UNKNOWN":
@@ -363,7 +363,7 @@ def get_monthly_docs(client):
                         undefined_projects_last_seen = max(undefined_projects_last_seen, bucket.get("last_seen", {"value": 0})["value"])
                         docs[datestr]["unmapped_projects"] += bucket["doc_count"]
                         docs["TOTAL"]["unmapped_projects"] += bucket["doc_count"]
-                    elif project not in PROJECT_MAP:
+                    elif project not in PROJECT_DATA:
                         if project not in unmapped_projects:
                             print(f"Project missing from institution map: {bucket['key']}")
                             unmapped_projects[bucket["key"]] = 0
