@@ -3,6 +3,7 @@ from collections import OrderedDict
 from string import ascii_uppercase
 from pathlib import Path
 from operator import itemgetter
+from functools import lru_cache
 import argparse
 import elasticsearch
 import xlsxwriter
@@ -188,8 +189,10 @@ def get_raw_data_query(start_dt, end_dt):
                             "lt": end_ts,
                         }
                     }},
-                    {"term": {
-                        "JobUniverse": 5,
+                    {"range": {
+                        "RemoteWallClockTime": {
+                            "gt": 0,
+                        }
                     }},
                 ],
                 "minimum_should_match": 1,
@@ -214,6 +217,9 @@ def get_raw_data_query(start_dt, end_dt):
                     {"terms": {
                         "ResourceName": list(NON_OSPOOL_RESOURCES)
                     }},
+                    {"terms": {
+                        "JobUniverse": [7, 12],
+                    }}
                 ],
             }
         }
@@ -282,26 +288,43 @@ def get_timestamps():
     return dates
 
 
+# Only need the printed output once per institution lookup
+@lru_cache(maxsize=256)
+def is_r1_institution(instituion_id, lookup_type="Unknown", lookup_name="Unknown"):
+    '''Only return True or False if a Carnegie classification exists, otherwise None'''
+    r1_research_activity = "Research 1: Very High Spending and Doctorate Production"
+
+    if not instituion_id:
+        print(f"No institution ID passed (for {lookup_type} {lookup_name})")
+    elif not instituion_id in INSTITUTION_DB:
+        print(f"Institution ID {instituion_id} not in database (for {lookup_type} {lookup_name})")
+    elif INSTITUTION_DB[instituion_id].get("carnegie_metadata") is None:
+        print(f"Institution ID {instituion_id} ({INSTITUTION_DB[instituion_id]['name']}) does not have Carnegie metadata (for {lookup_type} {lookup_name})")
+    elif not {"classification2021", "classification2025"} & INSTITUTION_DB[instituion_id]["carnegie_metadata"].keys():
+        print(f"Institution ID {instituion_id} ({INSTITUTION_DB[instituion_id]['name']}) does not have a Carnegie classification (for {lookup_type} {lookup_name})")
+    else:
+        research_activity = INSTITUTION_DB[instituion_id]["carnegie_metadata"].get("classification2025")
+        return research_activity == r1_research_activity
+
+
 def get_monthly_docs(client):
 
     docs = OrderedDict()
     timestamps = get_timestamps()
 
     bucket_names = ["users", "projects", "institutions_contrib", "institutions_benefit"]
+    set_names = ["non_r1_institutions_contrib", "non_r1_institutions_benefit"]
     sum_names = ["total_jobs", "core_hours", "files_transferred"]
     count_names = ["unmapped_projects", "unmapped_institutions"]
 
     docs["TOTAL"] = {name: 0. for name in sum_names + count_names}
     docs["TOTAL"]["date"] = "TOTAL"
-    total_datasets = {bucket_name: set() for bucket_name in bucket_names}
+    total_datasets = {name: set() for name in bucket_names + set_names + count_names}
 
     unmapped_resources = {}
-    undefined_resources_total = 0
     undefined_resources_last_seen = 0
     unmapped_projects = {}
-    undefined_projects_total = 0
     undefined_projects_last_seen = 0
-
 
     for datestr, (start_dt, end_dt,) in timestamps.items():
         docs[datestr] = {"date": datestr}
@@ -319,7 +342,7 @@ def get_monthly_docs(client):
                 docs["TOTAL"][count_name] = 0
             docs[datestr][count_name] = 0
 
-        raw_datasets = {bucket_name: set() for bucket_name in bucket_names}
+        raw_datasets = {name: set() for name in bucket_names + set_names}
         query = get_raw_data_query(start_dt, end_dt)
         results = do_query(client, query)
 
@@ -346,30 +369,42 @@ def get_monthly_docs(client):
                             unmapped_resources[bucket["key"]] = 0
                         unmapped_resources[bucket["key"]] = max(unmapped_resources[bucket["key"]], bucket.get("last_seen", {"value": 0})["value"])
                     elif (bucket["key"] == "UNKNOWN"):
-                        undefined_resources_total += bucket["doc_count"]
                         undefined_resources_last_seen = max(undefined_resources_last_seen, bucket.get("last_seen", {"value": 0})["value"])
+                    else:
+                        if name_or_id == "name":
+                            resource_id = RESOURCE_DATA.get(bucket["key"].lower(), {}).get("institution_id", "")
+                        else:
+                            resource_id = INSTITUTION_DB.get(bucket["key"], {}).get("id", "")
+                        r1 = is_r1_institution(resource_id, lookup_type="resource", lookup_name=value)
+                        if r1 is False:
+                            raw_datasets["non_r1_institutions_contrib"].add(value)
+                            total_datasets["non_r1_institutions_contrib"].add(value)
                 elif bucket_name == "users" and '@' in bucket["key"]:
                     user = bucket["key"].split("@", maxsplit=1)[0]
                     value = user.lower()
                 elif bucket_name == "projects":
                     project = bucket["key"].lower()
                     project_info = PROJECT_DATA.get(project)
+                    project_id = None
                     if project_info is not None:
                         project_institution = project_info["institution"]
+                        project_id = project_info.get("institution_id")
                         raw_datasets["institutions_benefit"].add(project_institution)
                         total_datasets["institutions_benefit"].add(project_institution)
                     if bucket["key"] == "UNKNOWN":
-                        undefined_projects_total += bucket["doc_count"]
                         undefined_projects_last_seen = max(undefined_projects_last_seen, bucket.get("last_seen", {"value": 0})["value"])
                         docs[datestr]["unmapped_projects"] += bucket["doc_count"]
                         docs["TOTAL"]["unmapped_projects"] += bucket["doc_count"]
                     elif project not in PROJECT_DATA:
                         if project not in unmapped_projects:
-                            print(f"Project missing from institution map: {bucket['key']}")
+                            print(f"Unmapped project: {bucket['key']}")
                             unmapped_projects[bucket["key"]] = 0
                         unmapped_projects[bucket["key"]] = max(unmapped_projects[bucket["key"]], bucket.get("last_seen", {"value": 0})["value"])
                         docs[datestr]["unmapped_institutions"] += bucket["doc_count"]
                         docs["TOTAL"]["unmapped_institutions"] += bucket["doc_count"]
+                    elif project_id is not None and is_r1_institution(project_id, lookup_type="project", lookup_name=project) is False:
+                        raw_datasets["non_r1_institutions_benefit"].add(project_institution)
+                        total_datasets["non_r1_institutions_benefit"].add(project_institution)
                     value = project
                 else:
                     value = bucket["key"].lower()
@@ -381,14 +416,20 @@ def get_monthly_docs(client):
             if bucket_name == "projects":
                 docs[datestr]["institutions_benefit"] = len(raw_datasets["institutions_benefit"])
 
+        for set_name in set_names:
+            docs[datestr][set_name] = len(raw_datasets[set_name])
+
     for bucket_name in bucket_names:
         print(f"{bucket_name}:")
         for i, value in enumerate(sorted(list(total_datasets[bucket_name]))):
             print(f"\t{i+1}. {value}")
         docs["TOTAL"][bucket_name] = len(total_datasets[bucket_name])
 
-    docs["TOTAL"]["unmapped_resources_dict"] = unmapped_resources
-    docs["TOTAL"]["unmapped_projects_dict"] = unmapped_projects
+    for set_name in set_names:
+        docs["TOTAL"][set_name] = len(total_datasets[set_name])
+
+    total_datasets["unmapped_resources"] = unmapped_resources
+    total_datasets["unmapped_projects"] = unmapped_projects
 
     return docs, total_datasets
 
@@ -402,7 +443,9 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
         ("Unique Users", "users"),
         ("Unique Projects", "projects"),
         ("Unique Institutions Benefiting", "institutions_benefit"),
+        ("Non-R1 Institutions Benefitting", "non_r1_institutions_benefit"),
         ("Unique Institutions Contributing", "institutions_contrib"),
+        ("Non-R1 Institutions Contributing", "non_r1_institutions_contrib"),
         ("Unknown Project Jobs", "unmapped_projects"),
         ("Unknown Project Institution Jobs", "unmapped_institutions"),
     ])
@@ -453,14 +496,18 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
 
     html += "</table>"
 
-    html += "<h2>Benefitting institutions over the last year</h2><ol>"
-    for value in sorted(list(total_datasets["institutions_benefit"])):
-        html += f"<li>{value}</li>"
+    html += "<h2>Benefitting institutions over the last year (Non-R1 in <strong>bold</strong>)</h2><ol>"
+    institutions = sorted(list(total_datasets["non_r1_institutions_benefit"])) + sorted(list(total_datasets["institutions_benefit"] - total_datasets["non_r1_institutions_benefit"]))
+    for value in institutions:
+        bold = ("<strong>", "</strong>",) if value in total_datasets["non_r1_institutions_benefit"] else ("", "",)
+        html += f"<li>{bold[0]}{value}{bold[1]}</li>"
     html += "</ol>"
 
-    html += "<h2>Contributing institutions over the last year</h2><ol>"
-    for value in sorted(list(total_datasets["institutions_contrib"])):
-        html += f"<li>{value}</li>"
+    html += "<h2>Contributing institutions over the last year (Non-R1 in <strong>bold</strong>)</h2><ol>"
+    institutions = sorted(list(total_datasets["non_r1_institutions_contrib"])) + sorted(list(total_datasets["institutions_contrib"] - total_datasets["non_r1_institutions_contrib"]))
+    for value in institutions:
+        bold = ("<strong>", "</strong>",) if value in total_datasets["non_r1_institutions_contrib"] else ("", "",)
+        html += f"<li>{bold[0]}{value}{bold[1]}</li>"
     html += "</ol>"
 
     html += "</body></html>"
@@ -476,6 +523,9 @@ def write_unmapped_dict(d: dict, text_file: Path):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--to", action="append")
+    parser.add_argument("--smtp-server")
+    parser.add_argument("--smtp-username")
+    parser.add_argument("--smtp-password-file", type=Path)
     return parser.parse_args()
 
 
@@ -491,8 +541,8 @@ def main():
     unmapped_resources_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_unmapped_resources.txt"
     unmapped_projects_file = Path() / "1year_summary" / f"{datestr}_OSPool_1Year_unmapped_projects.txt"
     html = write_xlsx_html(docs.values(), total_datasets, xlsx_file)
-    write_unmapped_dict(docs["TOTAL"]["unmapped_resources_dict"], unmapped_resources_file)
-    write_unmapped_dict(docs["TOTAL"]["unmapped_projects_dict"], unmapped_projects_file)
+    write_unmapped_dict(total_datasets["unmapped_resources"], unmapped_resources_file)
+    write_unmapped_dict(total_datasets["unmapped_projects"], unmapped_projects_file)
     subject = f"{datestr} OSPool 1-Year Summary"
     send_email(
         subject=subject,
@@ -500,7 +550,10 @@ def main():
         to_addrs=to,
         html=html,
         replyto_addr="ospool-reports@path-cc.io",
-        attachments=[xlsx_file, unmapped_resources_file, unmapped_projects_file]
+        attachments=[xlsx_file, unmapped_resources_file, unmapped_projects_file],
+        smtp_server=args.smtp_server,
+        smtp_username=args.smtp_username,
+        smtp_password_file=args.smtp_password_file,
     )
 
     with open("last_1yr_summary.html", "w") as f:
