@@ -1,9 +1,11 @@
-import htcondor
 from datetime import datetime
 from collections import defaultdict
 from operator import itemgetter
 import elasticsearch
 import json
+
+import htcondor
+import classad
 
 from pull_topology import get_mappings
 
@@ -176,6 +178,31 @@ def push_mips_summary(mips_summary):
     doc_id = f"{mips_summary['pool']}_{mips_summary['date']}"
     es.index(index=es_index_name, id=doc_id, body=mips_summary)
 
+
+def get_garbage_collect_summary():
+    mappings = get_mappings()
+    collector = htcondor.Collector(pool)
+    # Only query static/partitionable slots that have started in past 6 hours
+    constraint = classad.ExprTree(f"""SlotType != "Dynamic" && GCRemovedCount > 0 && DaemonStartTime >= {datetime.now().timestamp() - 6*3600}""")
+    startd_ads = collector.query(htcondor.AdTypes.Startd, constraint=constraint, projection=["GLIDEIN_ResourceName", "GCRemovedCount"])
+
+    sites = set()
+    removed = 0
+
+    for ad in startd_ads:
+        try:
+            resource = ad.get("GLIDEIN_ResourceName")
+            sites.add(mappings["site"].get(resource, f"Unmapped resource {resource}"))
+        except Exception:
+            pass
+        try:
+            removed += ad["GCRemovedCount"]
+        except Exception:
+            pass
+
+    return {"removed_glideins": removed, "removed_glideins_sites": len(sites)}
+
+
 def main():
 
     data_objs = get_mips()
@@ -184,8 +211,11 @@ def main():
     expanse_objs = get_expanse()
     expanse_summary = get_expanse_summary(*expanse_objs)
 
+    gc_summary = get_garbage_collect_summary()
+
     total_summary = mips_summary.copy()
     total_summary.update(expanse_summary)
+    total_summary.update(gc_summary)
 
     push_mips_summary(total_summary)
     #print(total_summary)
