@@ -48,14 +48,16 @@ def do_query(es, index, body):
     return docs
 
 def write_xlsx_html(docs, xlsx_file):
-    headers = ["Date", "Num Insts", "Top Core Insts", "Expanse EPs", "% Exht'd Exp EPs",
+    headers = ["Date", "Num Insts", "Top Core Insts",
+                    "Last 6h GC'd Glideins", "Num Sites w/ GC'd Glideins",
+                    "Expanse EPs", "% Exht'd Exp EPs",
                     "Total Cores", "Total MIPS", "Total Singularity Cores",
                     "Sites w/o S'ty", "% Slow MIPS", "% Slow Cores", "% Singularity Cores",
                     "Mean MIPS", "Median MIPS", "Min MIPS", "Max MIPS",
                     "Slow MIPS", "Slow Cores",
                     "% CPU Exht'd Exp EPs", "% Mem Exht'd Exp EPs", "% Disk Exht'd Exp EPs",
                     "Num Sites", "Top Core Sites", "Num Res", "Top Core Res"]
-    col_ids = OrderedDict(zip(headers, ascii_uppercase))
+    col_ids = OrderedDict(zip(headers, list(ascii_uppercase) + [f"A{a}" for a in ascii_uppercase]))
     header_key = {
         "Date": "date",
         "Min MIPS": "min_mips",
@@ -78,7 +80,9 @@ def write_xlsx_html(docs, xlsx_file):
         "% Exht'd Exp EPs": "pct_expanse_exhausted",
         "% CPU Exht'd Exp EPs": "pct_expanse_cpus_exhausted",
         "% Mem Exht'd Exp EPs": "pct_expanse_mem_exhausted",
-        "% Disk Exht'd Exp EPs": "pct_expanse_disk_exhausted"
+        "% Disk Exht'd Exp EPs": "pct_expanse_disk_exhausted",
+        "Last 6h GC'd Glideins": "removed_glideins",
+        "Num Sites w/ GC'd Glideins": "removed_glideins_sites",
     }
 
     workbook = xlsxwriter.Workbook(str(xlsx_file))
