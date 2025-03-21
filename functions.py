@@ -230,17 +230,20 @@ def get_topology_resource_data(cache_file=Path("./topology_resource_data.pickle"
         resource_map["institution_id"] = resource_institution_id
 
         resource_group_name = resource_group.find("GroupName").text
-        resource_map["name"] = resource_group_name
-        resources_data[resource_group_name.lower()] = resource_map.copy()
+        resource_map["group_name"] = resource_group_name
 
         resource_site_name = resource_group.find("Site").find("Name").text
+        resource_map["site_name"] = resource_site_name
         resource_map["name"] = resource_site_name
-        resources_data[resource_site_name.lower()] = resource_map.copy()
 
         resources = resource_group.find("Resources")
         for resource in resources:
-            resource_map["name"] = resource.find("Name").text
-            resources_data[resource_map["name"].lower()] = resource_map.copy()
+            resource_name = resource.find("Name").text
+            resource_map["resource_name"] = resource_name
+            resource_map["name"] = resource_name
+            resources_data[resource_name.lower()] = resource_map.copy()
+        resources_data[resource_group_name.lower()] = resource_map.copy()
+        resources_data[resource_site_name.lower()] = resource_map.copy()
 
     pickle.dump(resources_data, cache_file.open("wb"))
     return resources_data
