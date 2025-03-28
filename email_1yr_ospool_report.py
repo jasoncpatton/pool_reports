@@ -510,6 +510,16 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
         html += f"<li>{bold[0]}{value}{bold[1]}</li>"
     html += "</ol>"
 
+    html += "<h2>Projects that have run on the OSPool over the last year</h2><ol>"
+    projects = sorted(list(total_datasets["projects"]))
+    for value in projects:
+        project_data = PROJECT_DATA.get(value)
+        if project_data is not None:
+            html += f"<li>{project_data['name']}</li>"
+    for value in total_datasets["unmapped_projects"]:
+        html += f"<li>Unmapped project: {value}</li>"
+    html += "</ol>"
+
     html += "</body></html>"
     return html
 
