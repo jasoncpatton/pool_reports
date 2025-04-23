@@ -322,6 +322,10 @@ def get_monthly_docs(client):
     set_names = ["non_r1_institutions_contrib", "non_r1_institutions_benefit"]
     sum_names = ["total_jobs", "core_hours", "files_transferred", "osdf_files_transferred"]
     count_names = ["unmapped_projects", "unmapped_institutions"]
+    intersections = {
+        "institutions_both": ("institutions_contrib", "institutions_benefit",),
+        "non_r1_institutions_both": ("non_r1_institutions_contrib", "non_r1_institutions_benefit",),
+    }
 
     docs["TOTAL"] = {name: 0. for name in sum_names + count_names}
     docs["TOTAL"]["date"] = "TOTAL"
@@ -425,6 +429,9 @@ def get_monthly_docs(client):
         for set_name in set_names:
             docs[datestr][set_name] = len(raw_datasets[set_name])
 
+        for intersection_name, intersection_items in intersections.items():
+            docs[datestr][intersection_name] = len(set.intersection(*(raw_datasets[set_name] for set_name in intersection_items)))
+
     for bucket_name in bucket_names:
         print(f"{bucket_name}:")
         for i, value in enumerate(sorted(list(total_datasets[bucket_name]))):
@@ -433,6 +440,10 @@ def get_monthly_docs(client):
 
     for set_name in set_names:
         docs["TOTAL"][set_name] = len(total_datasets[set_name])
+
+    for intersection_name, intersection_items in intersections.items():
+        total_datasets[intersection_name] = set.intersection(*(total_datasets[set_name] for set_name in intersection_items))
+        docs["TOTAL"][intersection_name] = len(set.intersection(*(total_datasets[set_name] for set_name in intersection_items)))
 
     total_datasets["unmapped_resources"] = unmapped_resources
     total_datasets["unmapped_projects"] = unmapped_projects
@@ -453,6 +464,8 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
         ("Non-R1 Institutions Benefitting", "non_r1_institutions_benefit"),
         ("Unique Institutions Contributing", "institutions_contrib"),
         ("Non-R1 Institutions Contributing", "non_r1_institutions_contrib"),
+        ("Unique Institutions Benefit and Contrib", "institutions_both"),
+        ("Non-R1 Institutions Benefit and Contrib", "non_r1_institutions_both"),
         ("Unknown Project Jobs", "unmapped_projects"),
         ("Unknown Project Institution Jobs", "unmapped_institutions"),
     ])
@@ -497,7 +510,7 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
     worksheet.set_row(0, 30)
     worksheet.set_column(f"{col_ids['date']}:{col_ids['date']}", 10)
     worksheet.set_column(f"{col_ids['total_jobs']}:{col_ids['osdf_files_transferred']}", 13)
-    worksheet.set_column(f"{col_ids['users']}:{col_ids['institutions_contrib']}", 9)
+    worksheet.set_column(f"{col_ids['users']}:{col_ids['non_r1_institutions_both']}", 9)
 
     workbook.close()
 
@@ -514,6 +527,13 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
     institutions = sorted(list(total_datasets["non_r1_institutions_contrib"])) + sorted(list(total_datasets["institutions_contrib"] - total_datasets["non_r1_institutions_contrib"]))
     for value in institutions:
         bold = ("<strong>", "</strong>",) if value in total_datasets["non_r1_institutions_contrib"] else ("", "",)
+        html += f"<li>{bold[0]}{value}{bold[1]}</li>"
+    html += "</ol>"
+
+    html += "<h2>Both benefitting and contributing institutions over the last year (Non-R1 in <strong>bold</strong>)</h2><ol>"
+    institutions = sorted(list(total_datasets["non_r1_institutions_both"])) + sorted(list(total_datasets["institutions_both"] - total_datasets["non_r1_institutions_both"]))
+    for value in institutions:
+        bold = ("<strong>", "</strong>",) if value in total_datasets["non_r1_institutions_both"] else ("", "",)
         html += f"<li>{bold[0]}{value}{bold[1]}</li>"
     html += "</ol>"
 
