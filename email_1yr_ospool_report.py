@@ -63,6 +63,12 @@ def get_daily_totals_query(start_dt, end_dt):
                     "missing": 0,
                 }
             },
+            "osdf_files_transferred": {
+                "sum": {
+                    "field": "osdf_files_xferd",
+                    "missing": 0,
+                }
+            }
         },
         "query": {
             "bool": {
@@ -314,7 +320,7 @@ def get_monthly_docs(client):
 
     bucket_names = ["users", "projects", "institutions_contrib", "institutions_benefit"]
     set_names = ["non_r1_institutions_contrib", "non_r1_institutions_benefit"]
-    sum_names = ["total_jobs", "core_hours", "files_transferred"]
+    sum_names = ["total_jobs", "core_hours", "files_transferred", "osdf_files_transferred"]
     count_names = ["unmapped_projects", "unmapped_institutions"]
 
     docs["TOTAL"] = {name: 0. for name in sum_names + count_names}
@@ -440,6 +446,7 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
         ("Jobs Completed", "total_jobs"),
         ("Core Hours", "core_hours"),
         ("Files Transferred", "files_transferred"),
+        ("OSDF Files Transferred", "osdf_files_transferred"),
         ("Unique Users", "users"),
         ("Unique Projects", "projects"),
         ("Unique Institutions Benefiting", "institutions_benefit"),
@@ -489,7 +496,7 @@ def write_xlsx_html(docs, total_datasets, xlsx_file):
 
     worksheet.set_row(0, 30)
     worksheet.set_column(f"{col_ids['date']}:{col_ids['date']}", 10)
-    worksheet.set_column(f"{col_ids['total_jobs']}:{col_ids['files_transferred']}", 13)
+    worksheet.set_column(f"{col_ids['total_jobs']}:{col_ids['osdf_files_transferred']}", 13)
     worksheet.set_column(f"{col_ids['users']}:{col_ids['institutions_contrib']}", 9)
 
     workbook.close()
