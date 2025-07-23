@@ -226,9 +226,16 @@ def get_raw_data_query(start_dt, end_dt):
                     {"terms": {
                         "JobUniverse": [7, 12],
                     }},
-                    {"exists": {
-                        "field": "TargetAnnexName",
-                    }}
+                    {"bool": {
+                        "filter": [
+                            {"exists": {
+                                 "field": "TargetAnnexName",
+                            }},
+                            {"term": {
+                                "ResourceName": "Local Job",
+                            }}
+                        ],
+                    }},
                 ],
             }
         }
