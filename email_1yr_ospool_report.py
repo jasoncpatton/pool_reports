@@ -400,10 +400,10 @@ def get_monthly_docs(client):
                     elif (bucket["key"] == "UNKNOWN"):
                         undefined_resources_last_seen = max(undefined_resources_last_seen, bucket.get("last_seen", {"value": 0})["value"])
                     else:
-                        if name_or_id == "name":
+                        if name_or_id == "name":  # lookup the resource ID using the resource name from the job ad
                             resource_id = RESOURCE_DATA.get(bucket["key"].lower(), {}).get("institution_id", "")
-                        else:
-                            resource_id = INSTITUTION_DB.get(bucket["key"], {}).get("id", "")
+                        else:  # lookup the resource ID using the weirdly-formatted resource ID from the job ad
+                            resource_id = INSTITUTION_DB.get(bucket["key"].split("_")[-1], {}).get("id", "")
                         r1 = is_r1_institution(resource_id, lookup_type="resource", lookup_name=value)
                         if r1 is False:
                             raw_datasets["non_r1_institutions_contrib"].add(value)
