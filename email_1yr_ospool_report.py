@@ -389,6 +389,8 @@ def get_monthly_docs(client):
                 if bucket_name == "institutions_contrib":
                     if "osg-htc.org_" in bucket["key"]:  # use resource ID
                         name_or_id = "ID"
+                        if bucket["key"] == "osg-htc.org_iid_057bq1s94":  # Incorrectly mapped to Fullerton College
+                            bucket["key"] = "osg-htc.org_iid_md8sgbxite4u"
                         value = INSTITUTION_DB.get(bucket["key"].split("_")[-1], {}).get("name", "UNKNOWN")
                     else:
                         value = RESOURCE_DATA.get(bucket["key"].lower(), {}).get("institution", "UNKNOWN")
